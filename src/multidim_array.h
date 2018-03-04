@@ -57,6 +57,9 @@
 #include "src/complex.h"
 #include <limits>
 
+//add by ljx
+#include <x86intrin.h>
+//end add
 
 extern int bestPrecision(float F, int _width);
 extern std::string floatToString(float F, int _width, int _prec);
@@ -437,6 +440,18 @@ void coreScalarByArray(const T& op1, const MultidimArray<T>& op2,
 template<typename T>
 void coreArrayByArray(const MultidimArray<T>& op1, const MultidimArray<T>& op2,
                       MultidimArray<T>& result, char operation);
+
+//add by ljx reload new & delete
+void *operator new(size_t size)
+{
+	return _mm_malloc(size, 64);
+}
+
+void operator delete(void *p)
+{
+	_mm_free(p);
+}
+// end add
 
 /** Template class for Xmipp arrays.
   * This class provides physical and logical access.
@@ -1142,24 +1157,64 @@ public:
         }
 
         // Copy needed elements, fill with 0 if necessary
-        for (long int l = 0; l < Ndim; l++)
-            for (long int k = 0; k < Zdim; k++)
-                for (long int i = 0; i < Ydim; i++)
-                    for (long int j = 0; j < Xdim; j++)
-                    {
-                        T val;
-                        if (k >= ZSIZE(*this))
-                            val = 0;
-                        else if (i >= YSIZE(*this))
-                            val = 0;
-                        else if (j >= XSIZE(*this))
-                            val = 0;
-                        else
-                            val = DIRECT_A3D_ELEM(*this, k, i, j);
-                        new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = val;
-                    }
+        //for (long int l = 0; l < Ndim; l++)
+        //    for (long int k = 0; k < Zdim; k++)
+        //        for (long int i = 0; i < Ydim; i++)
+        //            for (long int j = 0; j < Xdim; j++)
+        //            {
+        //                T val;
+        //                if (k >= ZSIZE(*this))
+        //                    val = 0;
+        //                else if (i >= YSIZE(*this))
+        //                    val = 0;
+        //                else if (j >= XSIZE(*this))
+        //                    val = 0;
+        //                else
+        //                    val = DIRECT_A3D_ELEM(*this, k, i, j);
+        //                new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = val;
+        //            }
+//replace by ljx, use simd
+		if ( (ZSIZE(*this)<= Zdim) && (YSIZE(*this)<= Ydim) && (XSIZE(*this)<= Xdim) ) {
+			for (long int l = 0; l < Ndim; l++)
+				for (long int k = 0; k < Zdim; k++)
+					for (long int i = 0; i < Ydim; i++) {
+	#pragma simd
+						for (long int j = 0; j < Xdim; j++)
+						{
+							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = 0;
+						}
+					}
+			for (long int l = 0; l < Ndim; l++)
+				for (long int k = 0; k < ZSIZE(*this); k++)
+					for (long int i = 0; i < YSIZE(*this); i++) {
+	#pragma simd
+						for (long int j = 0; j < XSIZE(*this); j++)
+						{
+							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = DIRECT_A3D_ELEM(*this, k, i, j);
+						}
+					}
+		} else {
+			
+			for (long int l = 0; l < Ndim; l++)
+				for (long int k = 0; k < Zdim; k++)
+					for (long int i = 0; i < Ydim; i++)
+						for (long int j = 0; j < Xdim; j++)
+						{
+							T val;
+							if (k >= ZSIZE(*this))
+								val = 0;
+							else if (i >= YSIZE(*this))
+								val = 0;
+							else if (j >= XSIZE(*this))
+								val = 0;
+							else
+								val = DIRECT_A3D_ELEM(*this, k, i, j);
+							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = val;
+						}
+		}
+//end replace
 
-        // deallocate old vector
+        //// deallocate old vector
         coreDeallocate();
 
         // assign *this vector to the newly created
