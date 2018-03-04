@@ -58,7 +58,7 @@
 #include <limits>
 
 //add by ljx
-#include <x86intrin.h>
+//#include <x86intrin.h>
 //end add
 
 extern int bestPrecision(float F, int _width);
@@ -442,15 +442,15 @@ void coreArrayByArray(const MultidimArray<T>& op1, const MultidimArray<T>& op2,
                       MultidimArray<T>& result, char operation);
 
 //add by ljx reload new & delete
-void *operator new(size_t size)
-{
-	return _mm_malloc(size, 64);
-}
+//void *operator new(size_t size)
+//{
+//	return _mm_malloc(size, 64);
+//}
 
-void operator delete(void *p)
-{
-	_mm_free(p);
-}
+//void operator delete(void *p)
+//{
+//	_mm_free(p);
+//}
 // end add
 
 /** Template class for Xmipp arrays.
@@ -1178,7 +1178,7 @@ public:
 			for (long int l = 0; l < Ndim; l++)
 				for (long int k = 0; k < Zdim; k++)
 					for (long int i = 0; i < Ydim; i++) {
-	#pragma simd
+	#pragma ivdep
 						for (long int j = 0; j < Xdim; j++)
 						{
 							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = 0;
@@ -1187,7 +1187,7 @@ public:
 			for (long int l = 0; l < Ndim; l++)
 				for (long int k = 0; k < ZSIZE(*this); k++)
 					for (long int i = 0; i < YSIZE(*this); i++) {
-	#pragma simd
+	#pragma ivdep
 						for (long int j = 0; j < XSIZE(*this); j++)
 						{
 							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = DIRECT_A3D_ELEM(*this, k, i, j);
