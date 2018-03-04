@@ -442,15 +442,15 @@ void coreArrayByArray(const MultidimArray<T>& op1, const MultidimArray<T>& op2,
                       MultidimArray<T>& result, char operation);
 
 //add by ljx reload new & delete
-//void *operator new(size_t size)
-//{
-//	return _mm_malloc(size, 64);
-//}
+void *operator new(size_t size)
+{
+	return _mm_malloc(size, 64);
+}
 
-//void operator delete(void *p)
-//{
-//	_mm_free(p);
-//}
+void operator delete(void *p)
+{
+	_mm_free(p);
+}
 // end add
 
 /** Template class for Xmipp arrays.
