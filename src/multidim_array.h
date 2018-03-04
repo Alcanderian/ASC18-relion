@@ -58,6 +58,7 @@
 #include <limits>
 
 //add by ljx
+#include "src/mm_alloc.h"
 //#include <x86intrin.h>
 //end add
 
