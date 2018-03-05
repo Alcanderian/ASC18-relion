@@ -301,7 +301,8 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 		//}
 		//end move
 		//opt note: The if block below does not use 'temp', so we move the 'streamSync' and norm_correction to the next step.
-		//          At that time the mem copy may have been finished.
+		//          At that time the mem copy may have been finished
+		//          But just like the FIXME above says, this simply transferred the allocation-cost to that region.
 
 
 		// Helical reconstruction: calculate old_offset in the system of coordinates of the helix, i.e. parallel & perpendicular, depending on psi-angle!
@@ -1398,8 +1399,8 @@ void getAllSquaredDifferencesFine(unsigned exp_ipass,
 		} // end loop iclass
 
 		//comm by ljx
-		//for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
-		//	DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
+		for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
+			DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
 		//opt note: seem unnecessary just like the code at about 2670 row.
 		DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaStreamPerThread));
 
