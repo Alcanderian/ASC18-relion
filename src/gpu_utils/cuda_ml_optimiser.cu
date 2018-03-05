@@ -45,6 +45,11 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 	if (op.my_ori_particle == baseMLO->exp_my_first_ori_particle)
 		baseMLO->timer.tic(baseMLO->TIMING_ESP_FT);
 #endif
+	//add by ljx
+	CudaGlobalPtr<XFLOAT> temp(cudaMLO->devBundle->allocator);
+	bool malloced = false;
+	//end add
+	
 	//FourierTransformer transformer;
 	CUSTOM_ALLOCATOR_REGION_NAME("GFTCTF");
 
@@ -268,10 +273,20 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 		my_old_offset.selfROUND();
 
 		int img_size = img.data.nzyxdim;
+		//add by ljx, try to malloc just one time.
+		if (!malloced)
+		{
+			temp.setSize(img_size);
+			temp.setStream(0);
+			temp.h_ptr = new XFLOAT[img_size];
+			temp.device_alloc();
+			malloced = true;
+		}
+		//end add
+		//opt note: Fix it by alloc just once, but the 'streamSync' still takes a very long time.
+		//          I don't know why
 		CudaGlobalPtr<XFLOAT> d_img(img_size,0,cudaMLO->devBundle->allocator);
-		CudaGlobalPtr<XFLOAT> temp(img_size,0,cudaMLO->devBundle->allocator);
 		d_img.device_alloc();
-		temp.device_alloc();
 		d_img.device_init(0);
 
 		for (int i=0; i<img_size; i++)
