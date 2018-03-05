@@ -278,21 +278,30 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 			temp[i] = img.data.data[i];
 
 		temp.cp_to_device();
-		temp.streamSync();
+		//com by ljx
+		//temp.streamSync();
 
-		int STBsize = ( (int) ceilf(( float)img_size /(float)BLOCK_SIZE));
-		// Apply the norm_correction term
-		if (baseMLO->do_norm_correction)
-		{
-			CTIC(cudaMLO->timer,"norm_corr");
-			cuda_kernel_multi<<<STBsize,BLOCK_SIZE>>>(
-									~temp,
-									(XFLOAT)(baseMLO->mymodel.avg_norm_correction / normcorr),
-									img_size);
-			LAUNCH_PRIVATE_ERROR(cudaGetLastError(),cudaMLO->errorStatus);
-			temp.streamSync();
-			CTOC(cudaMLO->timer,"norm_corr");
-		}
+		//move by ljx, move to tag: norm after copy
+		//int STBsize = ( (int) ceilf(( float)img_size /(float)BLOCK_SIZE));
+		//// Apply the norm_correction term
+		//if (baseMLO->do_norm_correction)
+		//{
+		//	CTIC(cudaMLO->timer,"norm_corr");
+		//	//add by ljx
+		//	temp.streamSync();
+		//	//end add
+		//	cuda_kernel_multi<<<STBsize,BLOCK_SIZE>>>(
+		//							~temp,
+		//							(XFLOAT)(baseMLO->mymodel.avg_norm_correction / normcorr),
+		//							img_size);
+		//	LAUNCH_PRIVATE_ERROR(cudaGetLastError(),cudaMLO->errorStatus);
+		//	//com by ljx
+		//	//temp.streamSync();
+		//	CTOC(cudaMLO->timer,"norm_corr");
+		//}
+		//end move
+		//opt note: The if block below does not use 'temp', so we move the 'streamSync' and norm_correction to the next step.
+		//          At that time the mem copy may have been finished.
 
 
 		// Helical reconstruction: calculate old_offset in the system of coordinates of the helix, i.e. parallel & perpendicular, depending on psi-angle!
@@ -326,10 +335,32 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 			// TODO: Now re-calculate the my_old_offset in the real (or image) system of coordinate (rotate -psi angle)
 			transformCartesianAndHelicalCoords(my_old_offset_helix_coords, my_old_offset, rot_deg, tilt_deg, psi_deg, HELICAL_TO_CART_COORDS);
 		}
-
+		
+//tag: norm after copy
+		int STBsize = ( (int) ceilf(( float)img_size /(float)BLOCK_SIZE));
+		// Apply the norm_correction term
+		if (baseMLO->do_norm_correction)
+		{
+			CTIC(cudaMLO->timer,"norm_corr");
+			//add by ljx
+			temp.streamSync();
+			//end add
+			cuda_kernel_multi<<<STBsize,BLOCK_SIZE>>>(
+				~temp,
+				(XFLOAT)(baseMLO->mymodel.avg_norm_correction / normcorr),
+				img_size);
+			LAUNCH_PRIVATE_ERROR(cudaGetLastError(),cudaMLO->errorStatus);
+			//com by ljx
+			//temp.streamSync();
+			CTOC(cudaMLO->timer,"norm_corr");
+		}
+//end tag
 
 		my_old_offset.selfROUND();
 		CTIC(cudaMLO->timer,"kernel_translate");
+		//add by ljx
+		temp.streamSync();
+		//end add
 		if(cudaMLO->dataIs3D)
 			cuda_kernel_translate3D<<<STBsize,BLOCK_SIZE>>>(
 								~temp,  // translate from temp...
@@ -1366,8 +1397,10 @@ void getAllSquaredDifferencesFine(unsigned exp_ipass,
 			} // end if class significant
 		} // end loop iclass
 
-		for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
-			DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
+		//comm by ljx
+		//for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
+		//	DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
+		//opt note: seem unnecessary just like the code at about 2670 row.
 		DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaStreamPerThread));
 
 		FinePassWeights[ipart].setDataSize( newDataSize );
@@ -2667,9 +2700,10 @@ void storeWeightedSums(OptimisationParamters &op, SamplingParameters &sp,
 
 		// NOTE: We've never seen that this sync is necessary, but it is needed in principle, and
 		// its absence in other parts of the code has caused issues. It is also very low-cost.
-		// try remove by liangjx in 2018/3/4 10:32
-		// for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
+		//com by ljx
+		//for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
 		//	DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
+		//opt note: the NOTE above says it is unnecessary, just remove it.
 		DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaStreamPerThread));
 
 		wdiff2s_AA.cp_to_host();
