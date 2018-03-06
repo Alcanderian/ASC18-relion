@@ -2,5 +2,5 @@ external/
 doc/
 build/
 build-g/
-*.udb
-.DS_store
+*udb
+.DS_Store
