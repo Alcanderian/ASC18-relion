@@ -1142,22 +1142,62 @@ public:
         }
 
         // Copy needed elements, fill with 0 if necessary
-        for (long int l = 0; l < Ndim; l++)
-            for (long int k = 0; k < Zdim; k++)
-                for (long int i = 0; i < Ydim; i++)
-                    for (long int j = 0; j < Xdim; j++)
-                    {
-                        T val;
-                        if (k >= ZSIZE(*this))
-                            val = 0;
-                        else if (i >= YSIZE(*this))
-                            val = 0;
-                        else if (j >= XSIZE(*this))
-                            val = 0;
-                        else
-                            val = DIRECT_A3D_ELEM(*this, k, i, j);
-                        new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = val;
-                    }
+		//replace by ljx
+        //for (long int l = 0; l < Ndim; l++)
+        //    for (long int k = 0; k < Zdim; k++)
+        //        for (long int i = 0; i < Ydim; i++)
+        //            for (long int j = 0; j < Xdim; j++)
+        //            {
+        //                T val;
+        //                if (k >= ZSIZE(*this))
+        //                    val = 0;
+        //                else if (i >= YSIZE(*this))
+        //                    val = 0;
+        //                else if (j >= XSIZE(*this))
+        //                    val = 0;
+        //                else
+        //                    val = DIRECT_A3D_ELEM(*this, k, i, j);
+        //                new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = val;
+        //            }
+		if ( (ZSIZE(*this)<= Zdim) && (YSIZE(*this)<= Ydim) && (XSIZE(*this)<= Xdim) ) {
+			for (long int l = 0; l < Ndim; l++)
+				for (long int k = 0; k < Zdim; k++)
+					for (long int i = 0; i < Ydim; i++) {
+	#pragma ivdep
+						for (long int j = 0; j < Xdim; j++)
+						{
+							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = 0;
+						}
+					}
+			for (long int l = 0; l < Ndim; l++)
+				for (long int k = 0; k < ZSIZE(*this); k++)
+					for (long int i = 0; i < YSIZE(*this); i++) {
+	#pragma ivdep
+						for (long int j = 0; j < XSIZE(*this); j++)
+						{
+							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = DIRECT_A3D_ELEM(*this, k, i, j);
+						}
+					}
+		} else {
+
+			for (long int l = 0; l < Ndim; l++)
+				for (long int k = 0; k < Zdim; k++)
+					for (long int i = 0; i < Ydim; i++)
+						for (long int j = 0; j < Xdim; j++)
+						{
+							T val;
+							if (k >= ZSIZE(*this))
+								val = 0;
+							else if (i >= YSIZE(*this))
+								val = 0;
+							else if (j >= XSIZE(*this))
+								val = 0;
+							else
+								val = DIRECT_A3D_ELEM(*this, k, i, j);
+							new_data[l*ZYXdim + k*YXdim+i*Xdim+j] = val;
+						}
+		}
+		//end replace
 
         // deallocate old vector
         coreDeallocate();
