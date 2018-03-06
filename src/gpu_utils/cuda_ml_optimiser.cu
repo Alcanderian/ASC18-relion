@@ -279,6 +279,7 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 			temp.setSize(img_size);
 			temp.setStream(0);
 			temp.h_ptr = new XFLOAT[img_size];
+			temp.h_do_free = true; //need to be free
 			temp.device_alloc();
 			malloced = true;
 		}
