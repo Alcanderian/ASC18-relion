@@ -2667,9 +2667,8 @@ void storeWeightedSums(OptimisationParamters &op, SamplingParameters &sp,
 
 		// NOTE: We've never seen that this sync is necessary, but it is needed in principle, and
 		// its absence in other parts of the code has caused issues. It is also very low-cost.
-		// try remove by liangjx in 2018/3/4 10:32
-		// for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
-		//	DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
+		for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
+			DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
 		DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaStreamPerThread));
 
 		wdiff2s_AA.cp_to_host();
