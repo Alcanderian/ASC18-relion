@@ -449,12 +449,12 @@ void CenterFFT(MultidimArray< T >& v, bool forward)
 			{
 				// Shift the input in an auxiliar vector
 				int jp;
-				for (int j = 0; j < cutpoint; j++)
+				for (int j = 0; j < cutPoint; j++)
 				{
 					jp = j + shift;
 					aux(jp) = DIRECT_A2D_ELEM(v, i, j);
 				}
-				for (int j = cutpoint; j < l; j++)
+				for (int j = cutPoint; j < l; j++)
 				{
 					jp = j + shift - l;
 					aux(jp) = DIRECT_A2D_ELEM(v, i, j);
@@ -552,12 +552,12 @@ void CenterFFT(MultidimArray< T >& v, bool forward)
 				{
 					// Shift the input in an auxiliar vector
 					int jp;
-					for (int j = 0; j < cutpoint; j++)
+					for (int j = 0; j < cutPoint; j++)
 					{
 						jp = j + shift;
 						aux(jp) = DIRECT_A3D_ELEM(v, k, i, j);
 					}
-					for (int j = cutpoint; j < xl; j++)
+					for (int j = cutPoint; j < xl; j++)
 					{
 						jp = j + shift - xl;
 						aux(jp) = DIRECT_A3D_ELEM(v, k, i, j);
