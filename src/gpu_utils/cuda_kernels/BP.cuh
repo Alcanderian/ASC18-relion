@@ -63,8 +63,32 @@ __global__ void cuda_kernel_backproject2D(
 
 	int pixel_pass_num(ceilf((float)img_xy/(float)BP_2D_BLOCK_SIZE));
 
+	//add by ljx for opt
+	int btype = img % 4;
+	unsigned half_pixel_pass_num = pixel_pass_num << 1;
+	unsigned one_half_pixel_pass_num = pixel_pass_num + half_pixel_pass_num;
+	//end add
 	for (unsigned pass = 0; pass < pixel_pass_num; pass++)
     {
+		// opt by ljx, use 4 direction for opting atomic operation
+		//1. |----------------->
+		//2. <-----------------|
+		//3. --------|<---------
+		//4. -------->|---------
+		if (btype == 1)
+		{
+			pass = pixel_pass_num - pass - 1;
+		}
+		else if (btype = 2)
+		{
+			pass = (one_half_pixel_pass_num - pass - 1) % pixel_pass_num;
+		}
+		else if (btype == 3)
+		{
+			pass = (half_pixel_pass_num + pass) % pixel_pass_num;
+		}
+		// end opt
+			
 		unsigned pixel = (pass * BP_2D_BLOCK_SIZE) + tid;
 
 		if (pixel >= img_xy)
@@ -211,8 +235,32 @@ __global__ void cuda_kernel_backproject3D(
 	else
 		pixel_pass_num = (ceilf((float)img_xyz/(float)BP_REF3D_BLOCK_SIZE));
 
+	//add by ljx for opt
+	int btype = img % 4;
+	unsigned half_pixel_pass_num = pixel_pass_num << 1;
+	unsigned one_half_pixel_pass_num = pixel_pass_num + half_pixel_pass_num;
+	//end add
 	for (unsigned pass = 0; pass < pixel_pass_num; pass++)
     {
+		// opt by ljx, use 4 direction for opting atomic operation
+		//1. |----------------->
+		//2. <-----------------|
+		//3. --------|<---------
+		//4. -------->|---------
+		if (btype == 1)
+		{
+			pass = pixel_pass_num - pass - 1;
+		}
+		else if (btype = 2)
+		{
+			pass = (one_half_pixel_pass_num - pass - 1) % pixel_pass_num;
+		}
+		else if (btype == 3)
+		{
+			pass = (half_pixel_pass_num + pass) % pixel_pass_num;
+		}
+		// end opt
+		
 		unsigned pixel(0);
 		if(DATA3D)
 			pixel = (pass * BP_DATA3D_BLOCK_SIZE) + tid;

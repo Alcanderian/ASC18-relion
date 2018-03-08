@@ -47,8 +47,32 @@ __global__ void cuda_kernel_wavg(
 		s_eulers[tid] = g_eulers[bid*9+tid];
 	__syncthreads();
 
+	//add by ljx for opt
+	int btype = bid % 4;
+	unsigned half_pass_num = pass_num << 1;
+	unsigned one_half_pass_num = pass_num + half_pass_num;
+	//end add
 	for (unsigned pass = 0; pass < pass_num; pass++) // finish a reference proj in each block
 	{
+		// opt by ljx, use 4 direction for opting atomic operation
+		//1. |----------------->
+		//2. <-----------------|
+		//3. --------|<---------
+		//4. -------->|---------
+		if (btype == 1)
+		{
+			pass = pass_num - pass - 1;
+		}
+		else if (btype = 2) 
+		{
+			pass = (one_half_pass_num - pass - 1) % pass_num;
+		}
+		else if (btype == 3)
+		{
+			pass = (half_pass_num + pass) % pass_num;
+		}
+		// end opt
+		
 		s_wdiff2s_parts[tid] = 0.0f;
 		s_sumXA[tid] = 0.0f;
 		s_sumA2[tid] = 0.0f;
