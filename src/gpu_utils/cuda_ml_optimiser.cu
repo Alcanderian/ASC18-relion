@@ -45,11 +45,6 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 	if (op.my_ori_particle == baseMLO->exp_my_first_ori_particle)
 		baseMLO->timer.tic(baseMLO->TIMING_ESP_FT);
 #endif
-	//add by ljx
-	CudaGlobalPtr<XFLOAT> temp(cudaMLO->devBundle->allocator);
-	bool malloced = false;
-	//end add
-	
 	//FourierTransformer transformer;
 	CUSTOM_ALLOCATOR_REGION_NAME("GFTCTF");
 
@@ -273,52 +268,31 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 		my_old_offset.selfROUND();
 
 		int img_size = img.data.nzyxdim;
-		//add by ljx, try to malloc just one time.
-		if (!malloced)
-		{
-			temp.setSize(img_size);
-			temp.setStream(0);
-			temp.h_ptr = new XFLOAT[img_size];
-			temp.h_do_free = true; //need to be free
-			temp.device_alloc();
-			malloced = true;
-		}
-		//end add
-		//opt note: Fix it by alloc just once, but the 'streamSync' still takes a very long time.
-		//          I don't know why
 		CudaGlobalPtr<XFLOAT> d_img(img_size,0,cudaMLO->devBundle->allocator);
+		CudaGlobalPtr<XFLOAT> temp(img_size,0,cudaMLO->devBundle->allocator);
 		d_img.device_alloc();
+		temp.device_alloc();
 		d_img.device_init(0);
 
 		for (int i=0; i<img_size; i++)
 			temp[i] = img.data.data[i];
 
 		temp.cp_to_device();
-		//com by ljx
-		//temp.streamSync();
+		temp.streamSync();
 
-		//move by ljx, move to tag: norm after copy
-		//int STBsize = ( (int) ceilf(( float)img_size /(float)BLOCK_SIZE));
-		//// Apply the norm_correction term
-		//if (baseMLO->do_norm_correction)
-		//{
-		//	CTIC(cudaMLO->timer,"norm_corr");
-		//	//add by ljx
-		//	temp.streamSync();
-		//	//end add
-		//	cuda_kernel_multi<<<STBsize,BLOCK_SIZE>>>(
-		//							~temp,
-		//							(XFLOAT)(baseMLO->mymodel.avg_norm_correction / normcorr),
-		//							img_size);
-		//	LAUNCH_PRIVATE_ERROR(cudaGetLastError(),cudaMLO->errorStatus);
-		//	//com by ljx
-		//	//temp.streamSync();
-		//	CTOC(cudaMLO->timer,"norm_corr");
-		//}
-		//end move
-		//opt note: The if block below does not use 'temp', so we move the 'streamSync' and norm_correction to the next step.
-		//          At that time the mem copy may have been finished
-		//          But just like the FIXME above says, this simply transferred the allocation-cost to that region.
+		int STBsize = ( (int) ceilf(( float)img_size /(float)BLOCK_SIZE));
+		// Apply the norm_correction term
+		if (baseMLO->do_norm_correction)
+		{
+			CTIC(cudaMLO->timer,"norm_corr");
+			cuda_kernel_multi<<<STBsize,BLOCK_SIZE>>>(
+									~temp,
+									(XFLOAT)(baseMLO->mymodel.avg_norm_correction / normcorr),
+									img_size);
+			LAUNCH_PRIVATE_ERROR(cudaGetLastError(),cudaMLO->errorStatus);
+			temp.streamSync();
+			CTOC(cudaMLO->timer,"norm_corr");
+		}
 
 
 		// Helical reconstruction: calculate old_offset in the system of coordinates of the helix, i.e. parallel & perpendicular, depending on psi-angle!
@@ -352,32 +326,10 @@ void getFourierTransformsAndCtfs(long int my_ori_particle,
 			// TODO: Now re-calculate the my_old_offset in the real (or image) system of coordinate (rotate -psi angle)
 			transformCartesianAndHelicalCoords(my_old_offset_helix_coords, my_old_offset, rot_deg, tilt_deg, psi_deg, HELICAL_TO_CART_COORDS);
 		}
-		
-//tag: norm after copy
-		int STBsize = ( (int) ceilf(( float)img_size /(float)BLOCK_SIZE));
-		// Apply the norm_correction term
-		if (baseMLO->do_norm_correction)
-		{
-			CTIC(cudaMLO->timer,"norm_corr");
-			//add by ljx
-			temp.streamSync();
-			//end add
-			cuda_kernel_multi<<<STBsize,BLOCK_SIZE>>>(
-				~temp,
-				(XFLOAT)(baseMLO->mymodel.avg_norm_correction / normcorr),
-				img_size);
-			LAUNCH_PRIVATE_ERROR(cudaGetLastError(),cudaMLO->errorStatus);
-			//com by ljx
-			//temp.streamSync();
-			CTOC(cudaMLO->timer,"norm_corr");
-		}
-//end tag
+
 
 		my_old_offset.selfROUND();
 		CTIC(cudaMLO->timer,"kernel_translate");
-		//add by ljx
-		temp.streamSync();
-		//end add
 		if(cudaMLO->dataIs3D)
 			cuda_kernel_translate3D<<<STBsize,BLOCK_SIZE>>>(
 								~temp,  // translate from temp...
@@ -1414,10 +1366,8 @@ void getAllSquaredDifferencesFine(unsigned exp_ipass,
 			} // end if class significant
 		} // end loop iclass
 
-		//comm by ljx
 		for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
 			DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
-		//opt note: seem unnecessary just like the code at about 2670 row.
 		DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaStreamPerThread));
 
 		FinePassWeights[ipart].setDataSize( newDataSize );
@@ -2717,10 +2667,8 @@ void storeWeightedSums(OptimisationParamters &op, SamplingParameters &sp,
 
 		// NOTE: We've never seen that this sync is necessary, but it is needed in principle, and
 		// its absence in other parts of the code has caused issues. It is also very low-cost.
-		//com by ljx
-		//for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
-		//	DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
-		//opt note: the NOTE above says it is unnecessary, just remove it.
+		for (int exp_iclass = sp.iclass_min; exp_iclass <= sp.iclass_max; exp_iclass++)
+			DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaMLO->classStreams[exp_iclass]));
 		DEBUG_HANDLE_ERROR(cudaStreamSynchronize(cudaStreamPerThread));
 
 		wdiff2s_AA.cp_to_host();

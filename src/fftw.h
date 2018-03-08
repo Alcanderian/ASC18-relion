@@ -382,23 +382,30 @@ void CenterFFT(MultidimArray< T >& v, bool forward)
         l = XSIZE(v);
         aux.reshape(l);
         shift = (int)(l / 2);
-
-        if (!forward)
+		
+		//modify by zjw 2018.3.7
+        if (!forward){
             shift = -shift;
-
-        // Shift the input in an auxiliar vector
-        for (int i = 0; i < l; i++)
-        {
-            int ip = i + shift;
-
-            if (ip < 0)
-                ip += l;
-            else if (ip >= l)
-                ip -= l;
-
-            aux(ip) = DIRECT_A1D_ELEM(v, i);
-        }
-
+			for (int i = 0; i < shift; i++){
+				int ip = i + shift + l;
+				aux(ip) = DIRECT_A1D_ELEM(v, i);
+			}
+			for (int i = shift; i < l; i++){
+				int ip = i + shift;
+				aux(ip) = DIRECT_A1D_ELEM(v, i);
+			}
+		}
+		else{
+			int cutPoint = l - shift;
+			for (int i = 0; i < cutPoint; i++){
+				int ip = i + shift;
+				aux(ip) = DIRECT_A1D_ELEM(v, i);
+			}
+			for (int i = cutPoint; i < l; i++){
+				int ip = i + shift - l;
+				aux(ip) = DIRECT_A1D_ELEM(v, i);
+			}
+		}
         // Copy the vector
         for (int i = 0; i < l; i++)
             DIRECT_A1D_ELEM(v, i) = DIRECT_A1D_ELEM(aux, i);
@@ -414,148 +421,252 @@ void CenterFFT(MultidimArray< T >& v, bool forward)
         aux.reshape(l);
         shift = (int)(l / 2);
 
-        if (!forward)
+		//modify by zjw 2018.3.6
+        if (!forward){
             shift = -shift;
-
-        for (int i = 0; i < YSIZE(v); i++)
-        {
-            // Shift the input in an auxiliar vector
-            for (int j = 0; j < l; j++)
-            {
-                int jp = j + shift;
-
-                if (jp < 0)
-                    jp += l;
-                else if (jp >= l)
-                    jp -= l;
-
-                aux(jp) = DIRECT_A2D_ELEM(v, i, j);
+			for (int i = 0; i < YSIZE(v); i++)
+			{
+				// Shift the input in an auxiliar vector
+				int jp;
+				for (int j = 0; j < shift; j++)
+				{
+					jp = j + shift + l;
+					aux(jp) = DIRECT_A2D_ELEM(v, i, j);
+				}
+				for (int j = shift; j < l; j++)
+				{
+					jp = j + shift;
+					aux(jp) = DIRECT_A2D_ELEM(v, i, j);
+				}
+				// Copy the vector
+				for (int j = 0; j < l; j++)
+					DIRECT_A2D_ELEM(v, i, j) = DIRECT_A1D_ELEM(aux, j);
             }
-
-            // Copy the vector
-            for (int j = 0; j < l; j++)
-                DIRECT_A2D_ELEM(v, i, j) = DIRECT_A1D_ELEM(aux, j);
-        }
-
+		}
+		else{
+			int cutPoint = l - shift;
+			for (int i = 0; i < YSIZE(v); i++)
+			{
+				// Shift the input in an auxiliar vector
+				int jp;
+				for (int j = 0; j < cutPoint; j++)
+				{
+					jp = j + shift;
+					aux(jp) = DIRECT_A2D_ELEM(v, i, j);
+				}
+				for (int j = cutPoint; j < l; j++)
+				{
+					jp = j + shift - l;
+					aux(jp) = DIRECT_A2D_ELEM(v, i, j);
+				}
+				// Copy the vector
+				for (int j = 0; j < l; j++)
+					DIRECT_A2D_ELEM(v, i, j) = DIRECT_A1D_ELEM(aux, j);
+            }
+		}
         // Shift in the Y direction
         l = YSIZE(v);
-        aux.reshape(l);
+		aux.reshape(l, XSIZE(v));
+        //aux.reshape(l);
         shift = (int)(l / 2);
 
-        if (!forward)
+        if (!forward){
             shift = -shift;
-
-        for (int j = 0; j < XSIZE(v); j++)
-        {
-            // Shift the input in an auxiliar vector
-            for (int i = 0; i < l; i++)
-            {
-                int ip = i + shift;
-
-                if (ip < 0)
-                    ip += l;
-                else if (ip >= l)
-                    ip -= l;
-
-                aux(ip) = DIRECT_A2D_ELEM(v, i, j);
-            }
-
-            // Copy the vector
-            for (int i = 0; i < l; i++)
-                DIRECT_A2D_ELEM(v, i, j) = DIRECT_A1D_ELEM(aux, i);
-        }
+			// Shift the input in an auxiliar vector
+			for (int i = 0; i < shift; i++){
+				int ip = i + shift + l;
+				for (int j = 0; j < XSIZE(v); j++){
+					DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A2D_ELEM(v, i, j);
+				}
+			}
+			for (int i = shift; i < l; i++){
+				int ip = i + shift;
+				for (int j = 0; j < XSIZE(v); j++){
+					DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A2D_ELEM(v, i, j);
+				}
+			}
+		}
+		else{
+			// Shift the input in an auxiliar vector
+			int cutPoint = l - shift;
+			for (int i = 0; i < cutPoint; i++){
+				int ip = i + shift;
+				for (int j = 0; j < XSIZE(v); j++){
+					DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A2D_ELEM(v, i, j);
+				}
+			}
+			for (int i = cutPoint; i < l; i++){
+				int ip = i + shift - l;
+				for (int j = 0; j < XSIZE(v); j++){
+					DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A2D_ELEM(v, i, j);
+				}
+			}		
+		}
+		//copy the vector
+		for (int i = 0; i < l; i++)
+			for (int j = 0; j < XSIZE(v); j++)
+				DIRECT_A2D_ELEM(v, i, j) =  DIRECT_A2D_ELEM(aux, i, j);
+ 
     }
     else if ( v.getDim() == 3 )
     {
         // 3D
         MultidimArray< T > aux;
-        int l, shift;
+        int xl, yl, zl, shift;
+		
+		xl = XSIZE(v);
+		yl = YSIZE(v);
+		zl = ZSIZE(v);
 
         // Shift in the X direction
-        l = XSIZE(v);
-        aux.reshape(l);
-        shift = (int)(l / 2);
-
-        if (!forward)
+        aux.reshape(xl);
+        shift = (int)(xl / 2);
+        
+		// modify by zjw 2018.3.7
+        if (!forward){
             shift = -shift;
+			for (int k = 0; k < zl; k++)
+				for (int i = 0; i < yl; i++)
+				{
+					// Shift the input in an auxiliar vector
+					int jp;
+					for (int j = 0; j < shift; j++)
+					{
+						jp = j + shift + xl;
+						aux(jp) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+					for (int j = shift; j < xl; j++)
+					{
+						jp = j + shift;
+						aux(jp) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+					// Copy the vector
+					for (int j = 0; j < xl; j++)
+						DIRECT_A3D_ELEM(v, k, i, j) = DIRECT_A1D_ELEM(aux, j);
+				}
+		}
+		else{
+			int cutPoint = xl - shift;
+			for (int k = 0; k < zl; k++)
+				for (int i = 0; i < yl; i++)
+				{
+					// Shift the input in an auxiliar vector
+					int jp;
+					for (int j = 0; j < cutPoint; j++)
+					{
+						jp = j + shift;
+						aux(jp) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+					for (int j = cutPoint; j < xl; j++)
+					{
+						jp = j + shift - xl;
+						aux(jp) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+					// Copy the vector
+					for (int j = 0; j < xl; j++)
+						DIRECT_A3D_ELEM(v, k, i, j) = DIRECT_A1D_ELEM(aux, j);
+				}
+		}
 
-        for (int k = 0; k < ZSIZE(v); k++)
-            for (int i = 0; i < YSIZE(v); i++)
-            {
-                // Shift the input in an auxiliar vector
-                for (int j = 0; j < l; j++)
-                {
-                    int jp = j + shift;
-
-                    if (jp < 0)
-                        jp += l;
-                    else if (jp >= l)
-                        jp -= l;
-
-                    aux(jp) = DIRECT_A3D_ELEM(v, k, i, j);
-                }
-
-                // Copy the vector
-                for (int j = 0; j < l; j++)
-                    DIRECT_A3D_ELEM(v, k, i, j) = DIRECT_A1D_ELEM(aux, j);
-            }
+        
 
         // Shift in the Y direction
-        l = YSIZE(v);
-        aux.reshape(l);
-        shift = (int)(l / 2);
-
-        if (!forward)
+        aux.reshape(yl, xl);
+        shift = (int)(yl / 2);
+		
+        if (!forward){
             shift = -shift;
+			// Shift the input in an auxiliar vector
+			for (int k = 0; k < zl; k++){
+				for (int i = 0; i < shift; i++){
+					int ip = i + shift + yl;
+					for (int j = 0; j < xl; j++){
+						DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+				}
+				for (int i = shift; i < yl; i++){
+					int ip = i + shift;
+					for (int j = 0; j < xl; j++){
+						DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+				}
+				//copy the vector
+				for (int i = 0; i < yl; i++)
+					for (int j = 0; j < xl; j++)
+						DIRECT_A3D_ELEM(v, k, i, j) =  DIRECT_A2D_ELEM(aux, i, j);
+			}
+		}
+		else{
+			int cutPoint = yl - shift;
+			// Shift the input in an auxiliar vector
+			for (int k = 0; k < zl; k++){
+				for (int i = 0; i < cutPoint; i++){
+					int ip = i + shift;
+					for (int j = 0; j < xl; j++){
+						DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+				}
+				for (int i = cutPoint; i < yl; i++){
+					int ip = i + shift - yl;
+					for (int j = 0; j < xl; j++){
+						DIRECT_A2D_ELEM(aux, ip, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+				}		
+				//copy the vector
+				for (int i = 0; i < yl; i++)
+					for (int j = 0; j < xl; j++)
+						DIRECT_A3D_ELEM(v, k, i, j) =  DIRECT_A2D_ELEM(aux, i, j);
+			}
+		}
 
-        for (int k = 0; k < ZSIZE(v); k++)
-            for (int j = 0; j < XSIZE(v); j++)
-            {
-                // Shift the input in an auxiliar vector
-                for (int i = 0; i < l; i++)
-                {
-                    int ip = i + shift;
-
-                    if (ip < 0)
-                        ip += l;
-                    else if (ip >= l)
-                        ip -= l;
-
-                    aux(ip) = DIRECT_A3D_ELEM(v, k, i, j);
-                }
-
-                // Copy the vector
-                for (int i = 0; i < l; i++)
-                    DIRECT_A3D_ELEM(v, k, i, j) = DIRECT_A1D_ELEM(aux, i);
-            }
+        
 
         // Shift in the Z direction
-        l = ZSIZE(v);
-        aux.reshape(l);
-        shift = (int)(l / 2);
+        aux.reshape(zl, yl, xl);
+        shift = (int)(zl / 2);
 
-        if (!forward)
+        if (!forward){
             shift = -shift;
+			 // Shift the input in an auxiliar vector
+			for (int k = 0; k < shift; k++){
+				int kp = k + shift + zl;
+				for (int i = 0; i < yl; i++)
+					for (int j = 0; j < xl; j++){
+						DIRECT_A3D_ELEM(aux, kp, i, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+			}
+			for (int k = shift; k < zl; k++){
+				int kp = k + shift;
+				for (int i = 0; i < yl; i++)
+					for (int j = 0; j < xl; j++){
+						DIRECT_A3D_ELEM(aux, kp, i, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+			}
 
-        for (int i = 0; i < YSIZE(v); i++)
-            for (int j = 0; j < XSIZE(v); j++)
-            {
-                // Shift the input in an auxiliar vector
-                for (int k = 0; k < l; k++)
-                {
-                    int kp = k + shift;
-                    if (kp < 0)
-                        kp += l;
-                    else if (kp >= l)
-                        kp -= l;
-
-                    aux(kp) = DIRECT_A3D_ELEM(v, k, i, j);
-                }
-
-                // Copy the vector
-                for (int k = 0; k < l; k++)
-                    DIRECT_A3D_ELEM(v, k, i, j) = DIRECT_A1D_ELEM(aux, k);
-            }
+		}
+		else{
+			int cutPoint = zl - shift;
+			// Shift the input in an auxiliar vector
+			for (int k = 0; k < cutPoint; k++){
+				int kp = k + shift;
+				for (int i = 0; i < yl; i++)
+					for (int j = 0; j < xl; j++){
+						DIRECT_A3D_ELEM(aux, kp, i, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+			}
+			for (int k = cutPoint; k < zl; k++){
+				int kp = k + shift - zl;
+				for (int i = 0; i < yl; i++)
+					for (int j = 0; j < xl; j++){
+						DIRECT_A3D_ELEM(aux, kp, i, j) = DIRECT_A3D_ELEM(v, k, i, j);
+					}
+			}
+		}
+		//Copy the vector
+		for (int k = 0; k < zl; k++)
+			for (int i = 0; i < yl; i++)
+				for (int j = 0; j < xl; j++)
+					DIRECT_A3D_ELEM(v, k, i, j) = DIRECT_A3D_ELEM(aux, k, i, j);
     }
     else
     {

@@ -87,7 +87,6 @@ void MlOptimiserMpi::initialise()
 #ifdef DEBUG
     std::cerr<<"MlOptimiserMpi::initialise Entering"<<std::endl;
 #endif
-
 	// Print information about MPI nodes:
     if (!do_movies_in_batches)
     	printMpiNodesMachineNames(*node, nr_threads);
@@ -393,7 +392,7 @@ void MlOptimiserMpi::initialise()
 	        }
 		}
 		MPI_Barrier(MPI_COMM_WORLD);
-
+		
 		if(do_auto_refine)
 		{
 			if (!node->isMaster())
@@ -406,14 +405,19 @@ void MlOptimiserMpi::initialise()
 					size_t t = b->checkFixedSizedObjects(cudaDeviceShares[i]);
 					boxLim = ((t < boxLim) ? t : boxLim );
 				}
-				node->relion_MPI_Send(&boxLim, sizeof(size_t), MPI_INT, 0, MPITAG_INT, MPI_COMM_WORLD);
+				//bug fix 2018.3.8, para should be arraySize
+				//node->relion_MPI_Send(&boxLim, sizeof(size_t), MPI_INT, 0, MPITAG_INT, MPI_COMM_WORLD);
+				node->relion_MPI_Send(&boxLim, 1, MPI_INT, 0, MPITAG_INT, MPI_COMM_WORLD);
+				std::cout << "refine prepare slave fin " << std::endl;
 			}
 			else
 			{
 				size_t boxLim, LowBoxLim(10000);
 				for(int slave = 1; slave < node->size; slave++)
 				{
-					node->relion_MPI_Recv(&boxLim, sizeof(size_t), MPI_INT, slave, MPITAG_INT, MPI_COMM_WORLD, status);
+					//bug fix 2018.3.8, para should be arraySize
+					//node->relion_MPI_Recv(&boxLim, sizeof(size_t), MPI_INT, slave, MPITAG_INT, MPI_COMM_WORLD, status);
+					node->relion_MPI_Recv(&boxLim, 1, MPI_INT, slave, MPITAG_INT, MPI_COMM_WORLD, status);
 					LowBoxLim = (boxLim < LowBoxLim ? boxLim : LowBoxLim );
 				}
 
