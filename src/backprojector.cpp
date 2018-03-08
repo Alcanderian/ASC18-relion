@@ -611,16 +611,18 @@ void BackProjector::getLowResDataAndWeight(MultidimArray<Complex > &lowres_data,
 
 	// fill lowres arrays with relevant values
 	//modify by zjw 2018.3.8 reduce unuse loop
-	long int lr2;
+	long int lr2_k,lr2_i,lr2_j;
 	for (long int k=STARTINGZ(lowres_data); k<=FINISHINGZ(lowres_data); k++){
-		lr2 = k*k;
-		if (lr2 > lowres_r2_max) break;
+		lr2_k = k*k;
+		if (lr2_k > lowres_r2_max) break;
+		
         for (long int i=STARTINGY(lowres_data); i<=FINISHINGY(lowres_data); i++){
-			lr2 += i*i;
-			if (lr2 > lowres_r2_max) break;
+			lr2_i = lr2_k + i*i;
+			if (lr2_i > lowres_r2_max) break;
+			
             for (long int j=STARTINGX(lowres_data); j<=FINISHINGX(lowres_data); j++){
-				lr2 += j*j;
-				if (lr2 > lowres_r2_max) break;
+				lr2_j = lr2_i + j*j;
+				if (lr2_j > lowres_r2_max) break;
 		
 				A3D_ELEM(lowres_data, k, i, j) = A3D_ELEM(data, k , i, j);
 				A3D_ELEM(lowres_weight, k, i, j) = A3D_ELEM(weight, k , i, j);
@@ -656,16 +658,18 @@ void BackProjector::setLowResDataAndWeight(MultidimArray<Complex > &lowres_data,
 
 	// Overwrite data and weight with the lowres arrays
 	//modify by zjw 2018.3.8 reduce unuse loop
-	long int lr2;
+	long int lr2_k,lr2_i,lr2_j;
 	for (long int k=STARTINGZ(lowres_data); k<=FINISHINGZ(lowres_data); k++){
-		lr2 = k*k;
-		if (lr2 > lowres_r2_max) break;
+		lr2_k = k*k;
+		if (lr2_k > lowres_r2_max) break;
+		
         for (long int i=STARTINGY(lowres_data); i<=FINISHINGY(lowres_data); i++){
-			lr2 += i*i;
-			if (lr2 > lowres_r2_max) break;
+			lr2_i = lr2_k + i*i;
+			if (lr2_i > lowres_r2_max) break;
+			
             for (long int j=STARTINGX(lowres_data); j<=FINISHINGX(lowres_data); j++){
-				lr2 += j*j;
-				if (lr2 > lowres_r2_max) break;
+				lr2_j = lr2_i + j*j;
+				if (lr2_j > lowres_r2_max) break;
 				
 				A3D_ELEM(data, k, i, j) = A3D_ELEM(lowres_data, k , i, j);
 				A3D_ELEM(weight, k, i, j) = A3D_ELEM(lowres_weight, k , i, j);
@@ -1340,7 +1344,7 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 	Matrix2D<RFLOAT> R(4, 4); // A matrix from the list
 	MultidimArray<RFLOAT> sum_weight;
 	MultidimArray<Complex > sum_data;
-    RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
+    RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2_k, r2_i, r2;
     bool is_neg_x;
     int x0, x1, y0, y1, z0, z1;
 	Complex d000, d001, d010, d011, d100, d101, d110, d111;
@@ -1364,16 +1368,16 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 			// Loop over all points in the output (i.e. rotated, or summed) array
 			//modify by zjw 2018.3.8, reduce unuse loop
 			for (long int k=STARTINGZ(sum_weight); k<=FINISHINGZ(sum_weight); k++){
-				r2 = k*k;
-				if (r2 > rmax2) break;
+				r2_k = k*k;
+				if (r2_k > rmax2) break;
 				
 				for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++){
-					r2 += i*i;
-					if (r2 > rmax2) break;
+					r2_i = r2_k + i*i;
+					if (r2_i > rmax2) break;
 					
 					for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++){
 						
-						r2 += j*j;
+						r2 = r2_i + j*j;
 						if (r2 > rmax2) break;
 						x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
 						y = (RFLOAT)i;
@@ -1516,7 +1520,7 @@ void BackProjector::applyPointGroupSymmetry()
 		Matrix2D<RFLOAT> L(4, 4), R(4, 4); // A matrix from the list
 		MultidimArray<RFLOAT> sum_weight;
 		MultidimArray<Complex > sum_data;
-        RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
+        RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2, r2_k, r2_i;
         bool is_neg_x;
         int x0, x1, y0, y1, z0, z1;
     	Complex d000, d001, d010, d011, d100, d101, d110, d111;
@@ -1538,15 +1542,16 @@ void BackProjector::applyPointGroupSymmetry()
 	        // Loop over all points in the output (i.e. rotated, or summed) array
 			//modify by zjw 2018.3.8, reduce unuse loop
 			for (long int k=STARTINGZ(sum_weight); k<=FINISHINGZ(sum_weight); k++){
-				r2 = k*k;
-				if (r2 > rmax2) break;
+				r2_k = k*k;
+				if (r2_k > rmax2) break;
 				
 				for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++){
-					r2 += i*i;
-					if (r2 > rmax2) break;
+					r2_i = r2_k + i*i;
+					if (r2_i > rmax2) break;
 					
 					for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++){
-						r2 += j*j;
+						
+						r2 = r2_i + j*j;
 						if (r2 > rmax2) break;
 						x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
 						y = (RFLOAT)i;
