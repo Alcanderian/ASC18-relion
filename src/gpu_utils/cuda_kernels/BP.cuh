@@ -65,7 +65,7 @@ __global__ void cuda_kernel_backproject2D(
 
 	//add by ljx for opt
 	int btype = img % 4;
-	unsigned half_pixel_pass_num = pixel_pass_num << 1;
+	unsigned half_pixel_pass_num = pixel_pass_num >> 1;
 	unsigned one_half_pixel_pass_num = pixel_pass_num + half_pixel_pass_num;
 	//end add
 	for (unsigned pass = 0; pass < pixel_pass_num; pass++)
@@ -79,7 +79,7 @@ __global__ void cuda_kernel_backproject2D(
 		{
 			pass = pixel_pass_num - pass - 1;
 		}
-		else if (btype = 2)
+		else if (btype == 2)
 		{
 			pass = (one_half_pixel_pass_num - pass - 1) % pixel_pass_num;
 		}
@@ -237,7 +237,7 @@ __global__ void cuda_kernel_backproject3D(
 
 	//add by ljx for opt
 	int btype = img % 4;
-	unsigned half_pixel_pass_num = pixel_pass_num << 1;
+	unsigned half_pixel_pass_num = pixel_pass_num >> 1;
 	unsigned one_half_pixel_pass_num = pixel_pass_num + half_pixel_pass_num;
 	//end add
 	for (unsigned pass = 0; pass < pixel_pass_num; pass++)
@@ -251,7 +251,7 @@ __global__ void cuda_kernel_backproject3D(
 		{
 			pass = pixel_pass_num - pass - 1;
 		}
-		else if (btype = 2)
+		else if (btype == 2)
 		{
 			pass = (one_half_pixel_pass_num - pass - 1) % pixel_pass_num;
 		}

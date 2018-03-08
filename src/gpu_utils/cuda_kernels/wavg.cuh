@@ -49,7 +49,7 @@ __global__ void cuda_kernel_wavg(
 
 	//add by ljx for opt
 	int btype = bid % 4;
-	unsigned half_pass_num = pass_num << 1;
+	unsigned half_pass_num = pass_num >> 1;
 	unsigned one_half_pass_num = pass_num + half_pass_num;
 	//end add
 	for (unsigned pass = 0; pass < pass_num; pass++) // finish a reference proj in each block
@@ -63,7 +63,7 @@ __global__ void cuda_kernel_wavg(
 		{
 			pass = pass_num - pass - 1;
 		}
-		else if (btype = 2) 
+		else if (btype == 2) 
 		{
 			pass = (one_half_pass_num - pass - 1) % pass_num;
 		}
