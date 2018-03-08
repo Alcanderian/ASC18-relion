@@ -4,4 +4,4 @@ build/
 build-g/
 *.udb
 .DS_Store
-Compiling_Notes_2.md
+*.md
