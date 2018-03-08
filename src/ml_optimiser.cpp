@@ -5631,7 +5631,9 @@ void MlOptimiser::getAllSquaredDifferences(long int my_ori_particle, int ibody, 
 												//    diff2 -= (DIRECT_MULTIDIM_ELEM(Frefctf, n)).imag * (*(Fimg_shift + n)).imag;
 												//	suma2 += norm(DIRECT_MULTIDIM_ELEM(Frefctf, n));
 												//}
-												Complex *opp;                                                                                                   FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(Frefctf)                                                                                {
+												Complex *opp;
+												FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(Frefctf)
+												{
 													diff2 -= (DIRECT_MULTIDIM_ELEM(Frefctf, n)).real * (*(Fimg_shift + n)).real;
 													diff2 -= (DIRECT_MULTIDIM_ELEM(Frefctf, n)).imag * (*(Fimg_shift + n)).imag;
 													opp = & DIRECT_MULTIDIM_ELEM(Frefctf, n);
