@@ -47,48 +47,28 @@ __global__ void cuda_kernel_backproject2D(
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
 	// opt by ljx 2018.3.7, make less if-branch
-	//if (tid == 0)
-	//	s_eulers[0] = g_eulers[img*9+0] * padding_factor;
-	//else if (tid == 1)
-	//	s_eulers[1] = g_eulers[img*9+1] * padding_factor;
-	//else if (tid == 2)
-	//	s_eulers[2] = g_eulers[img*9+3] * padding_factor;
-	//else if (tid == 3)
-	//	s_eulers[3] = g_eulers[img*9+4] * padding_factor;
-	if (tid < 4)
-		s_eulers[tid] = g_eulers[img*9+tid] * padding_factor;
+	if (tid == 0)
+		s_eulers[0] = g_eulers[img*9+0] * padding_factor;
+	else if (tid == 1)
+		s_eulers[1] = g_eulers[img*9+1] * padding_factor;
+	else if (tid == 2)
+		s_eulers[2] = g_eulers[img*9+3] * padding_factor;
+	else if (tid == 3)
+		s_eulers[3] = g_eulers[img*9+4] * padding_factor;
+	
+	// fic by ljx 2018.9, it was 0,1,3,4 not 0,1,2,3
+	//if (tid < 4)
+	//	s_eulers[tid] = g_eulers[img*9+tid] * padding_factor;
+	//if (tid < 4)
+	//	s_eulers[tid] = g_eulers[img*9+tid+(tid>>1)] * padding_factor;
 	// end opt
 
 	__syncthreads();
 
 	int pixel_pass_num(ceilf((float)img_xy/(float)BP_2D_BLOCK_SIZE));
 
-	//add by ljx for opt
-	int btype = img % 4;
-	unsigned half_pixel_pass_num = pixel_pass_num >> 1;
-	unsigned one_half_pixel_pass_num = pixel_pass_num + half_pixel_pass_num;
-	//end add
 	for (unsigned pass = 0; pass < pixel_pass_num; pass++)
     {
-		// opt by ljx, use 4 direction for opting atomic operation
-		//1. |----------------->
-		//2. <-----------------|
-		//3. --------|<---------
-		//4. -------->|---------
-		if (btype == 1)
-		{
-			pass = pixel_pass_num - pass - 1;
-		}
-		else if (btype == 2)
-		{
-			pass = (one_half_pixel_pass_num - pass - 1) % pixel_pass_num;
-		}
-		else if (btype == 3)
-		{
-			pass = (half_pixel_pass_num + pass) % pixel_pass_num;
-		}
-		// end opt
-			
 		unsigned pixel = (pass * BP_2D_BLOCK_SIZE) + tid;
 
 		if (pixel >= img_xy)
@@ -235,32 +215,8 @@ __global__ void cuda_kernel_backproject3D(
 	else
 		pixel_pass_num = (ceilf((float)img_xyz/(float)BP_REF3D_BLOCK_SIZE));
 
-	//add by ljx for opt
-	int btype = img % 4;
-	unsigned half_pixel_pass_num = pixel_pass_num >> 1;
-	unsigned one_half_pixel_pass_num = pixel_pass_num + half_pixel_pass_num;
-	//end add
 	for (unsigned pass = 0; pass < pixel_pass_num; pass++)
     {
-		// opt by ljx, use 4 direction for opting atomic operation
-		//1. |----------------->
-		//2. <-----------------|
-		//3. --------|<---------
-		//4. -------->|---------
-		if (btype == 1)
-		{
-			pass = pixel_pass_num - pass - 1;
-		}
-		else if (btype == 2)
-		{
-			pass = (one_half_pixel_pass_num - pass - 1) % pixel_pass_num;
-		}
-		else if (btype == 3)
-		{
-			pass = (half_pixel_pass_num + pass) % pixel_pass_num;
-		}
-		// end opt
-		
 		unsigned pixel(0);
 		if(DATA3D)
 			pixel = (pass * BP_DATA3D_BLOCK_SIZE) + tid;
