@@ -408,7 +408,6 @@ void MlOptimiserMpi::initialise()
 				//bug fix 2018.3.8, para should be arraySize
 				//node->relion_MPI_Send(&boxLim, sizeof(size_t), MPI_INT, 0, MPITAG_INT, MPI_COMM_WORLD);
 				node->relion_MPI_Send(&boxLim, 1, MPI_INT, 0, MPITAG_INT, MPI_COMM_WORLD);
-				std::cout << "refine prepare slave fin " << std::endl;
 			}
 			else
 			{

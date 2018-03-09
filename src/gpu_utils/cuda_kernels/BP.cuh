@@ -47,16 +47,20 @@ __global__ void cuda_kernel_backproject2D(
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
 	// opt by ljx 2018.3.7, make less if-branch
-	//if (tid == 0)
-	//	s_eulers[0] = g_eulers[img*9+0] * padding_factor;
-	//else if (tid == 1)
-	//	s_eulers[1] = g_eulers[img*9+1] * padding_factor;
-	//else if (tid == 2)
-	//	s_eulers[2] = g_eulers[img*9+3] * padding_factor;
-	//else if (tid == 3)
-	//	s_eulers[3] = g_eulers[img*9+4] * padding_factor;
-	if (tid < 4)
-		s_eulers[tid] = g_eulers[img*9+tid] * padding_factor;
+	if (tid == 0)
+		s_eulers[0] = g_eulers[img*9+0] * padding_factor;
+	else if (tid == 1)
+		s_eulers[1] = g_eulers[img*9+1] * padding_factor;
+	else if (tid == 2)
+		s_eulers[2] = g_eulers[img*9+3] * padding_factor;
+	else if (tid == 3)
+		s_eulers[3] = g_eulers[img*9+4] * padding_factor;
+	
+	// fic by ljx 2018.9, it was 0,1,3,4 not 0,1,2,3
+	//if (tid < 4)
+	//	s_eulers[tid] = g_eulers[img*9+tid] * padding_factor;
+	//if (tid < 4)
+	//	s_eulers[tid] = g_eulers[img*9+tid+(tid>>1)] * padding_factor;
 	// end opt
 
 	__syncthreads();
