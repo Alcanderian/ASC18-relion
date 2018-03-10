@@ -32,6 +32,7 @@
 #define MPITAG_RFLOAT 6
 #define MPITAG_INT 7
 #define MPITAG_IDENTIFIER 8
+#define MPITAG_UINT64 9
 
 class MlOptimiserMpi: public MlOptimiser
 {

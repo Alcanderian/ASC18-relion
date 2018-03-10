@@ -407,7 +407,7 @@ void MlOptimiserMpi::initialise()
 				}
 				//bug fix 2018.3.8, para should be arraySize
 				//node->relion_MPI_Send(&boxLim, sizeof(size_t), MPI_INT, 0, MPITAG_INT, MPI_COMM_WORLD);
-				node->relion_MPI_Send(&boxLim, 1, MPI_INT, 0, MPITAG_INT, MPI_COMM_WORLD);
+				node->relion_MPI_Send(&boxLim, 1, MPI_UNSIGNED_LONG_LONG, 0, MPITAG_UINT64, MPI_COMM_WORLD);
 			}
 			else
 			{
@@ -416,7 +416,7 @@ void MlOptimiserMpi::initialise()
 				{
 					//bug fix 2018.3.8, para should be arraySize
 					//node->relion_MPI_Recv(&boxLim, sizeof(size_t), MPI_INT, slave, MPITAG_INT, MPI_COMM_WORLD, status);
-					node->relion_MPI_Recv(&boxLim, 1, MPI_INT, slave, MPITAG_INT, MPI_COMM_WORLD, status);
+					node->relion_MPI_Recv(&boxLim, 1, MPI_UNSIGNED_LONG_LONG, slave, MPITAG_UINT64, MPI_COMM_WORLD, status);
 					LowBoxLim = (boxLim < LowBoxLim ? boxLim : LowBoxLim );
 				}
 
