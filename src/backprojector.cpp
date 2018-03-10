@@ -113,9 +113,8 @@ void BackProjector::backproject(const MultidimArray<Complex > &f2d,
 		{
 	    	// Only include points with radius < max_r (exclude points outside circle in square)
 			r2 = x * x + y2;
-			//modify by zjw 2018.3.6 reduce unuse loop
 			if (r2 > max_r2)
-				break;
+				continue;
 
 			// Get the relevant value in the input image
 			my_val = DIRECT_A2D_ELEM(f2d, i, x);
@@ -292,9 +291,8 @@ void BackProjector::backrotate2D(const MultidimArray<Complex > &f2d,
 		{
 	    	// Only include points with radius < max_r (exclude points outside circle in square)
 			r2 = x * x + y2;
-			//modify by zjw 2018.3.6  continue->break reduce unuse loop
 			if (r2 > max_r2)
-				break;
+				continue;
 
 			// Get the relevant value in the input image
 			my_val = DIRECT_A2D_ELEM(f2d, i, x);
@@ -462,9 +460,8 @@ void BackProjector::backrotate3D(const MultidimArray<Complex > &f3d,
 			{
 				// Only include points with radius < max_r (exclude points outside circle in square)
 				r2 = x * x + y2 + z2;
-				//modify by zjw 2018.3.8,reduce unuse loop
 				if (r2 > max_r2)
-					break;
+					continue;
 
 				// Get the relevant value in the input image
 				my_val = DIRECT_A3D_ELEM(f3d, k, i, x);
@@ -610,23 +607,12 @@ void BackProjector::getLowResDataAndWeight(MultidimArray<Complex > &lowres_data,
 	lowres_weight.xinit=0;
 
 	// fill lowres arrays with relevant values
-	//modify by zjw 2018.3.8 reduce unuse loop
-	long int lr2_k,lr2_i,lr2_j;
-	for (long int k=STARTINGZ(lowres_data); k<=FINISHINGZ(lowres_data); k++){
-		lr2_k = k*k;
-		if (lr2_k > lowres_r2_max) break;
-		
-        for (long int i=STARTINGY(lowres_data); i<=FINISHINGY(lowres_data); i++){
-			lr2_i = lr2_k + i*i;
-			if (lr2_i > lowres_r2_max) break;
-			
-            for (long int j=STARTINGX(lowres_data); j<=FINISHINGX(lowres_data); j++){
-				lr2_j = lr2_i + j*j;
-				if (lr2_j > lowres_r2_max) break;
-		
-				A3D_ELEM(lowres_data, k, i, j) = A3D_ELEM(data, k , i, j);
-				A3D_ELEM(lowres_weight, k, i, j) = A3D_ELEM(weight, k , i, j);
-			}
+	FOR_ALL_ELEMENTS_IN_ARRAY3D(lowres_data)
+	{
+		if (k*k + i*i + j*j <= lowres_r2_max)
+		{
+			A3D_ELEM(lowres_data, k, i, j) = A3D_ELEM(data, k , i, j);
+			A3D_ELEM(lowres_weight, k, i, j) = A3D_ELEM(weight, k , i, j);
 		}
 	}
 }
@@ -657,25 +643,15 @@ void BackProjector::setLowResDataAndWeight(MultidimArray<Complex > &lowres_data,
 	lowres_weight.xinit=0;
 
 	// Overwrite data and weight with the lowres arrays
-	//modify by zjw 2018.3.8 reduce unuse loop
-	long int lr2_k,lr2_i,lr2_j;
-	for (long int k=STARTINGZ(lowres_data); k<=FINISHINGZ(lowres_data); k++){
-		lr2_k = k*k;
-		if (lr2_k > lowres_r2_max) break;
-		
-        for (long int i=STARTINGY(lowres_data); i<=FINISHINGY(lowres_data); i++){
-			lr2_i = lr2_k + i*i;
-			if (lr2_i > lowres_r2_max) break;
-			
-            for (long int j=STARTINGX(lowres_data); j<=FINISHINGX(lowres_data); j++){
-				lr2_j = lr2_i + j*j;
-				if (lr2_j > lowres_r2_max) break;
-				
-				A3D_ELEM(data, k, i, j) = A3D_ELEM(lowres_data, k , i, j);
-				A3D_ELEM(weight, k, i, j) = A3D_ELEM(lowres_weight, k , i, j);
-			}
+	FOR_ALL_ELEMENTS_IN_ARRAY3D(lowres_data)
+	{
+		if (k*k + i*i + j*j <= lowres_r2_max)
+		{
+			A3D_ELEM(data, k, i, j) = A3D_ELEM(lowres_data, k , i, j);
+			A3D_ELEM(weight, k, i, j) = A3D_ELEM(lowres_weight, k , i, j);
 		}
 	}
+
 }
 
 
@@ -1344,7 +1320,7 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 	Matrix2D<RFLOAT> R(4, 4); // A matrix from the list
 	MultidimArray<RFLOAT> sum_weight;
 	MultidimArray<Complex > sum_data;
-    RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2_k, r2_i, r2;
+    RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
     bool is_neg_x;
     int x0, x1, y0, y1, z0, z1;
 	Complex d000, d001, d010, d011, d100, d101, d110, d111;
@@ -1366,59 +1342,50 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 			R.setSmallValuesToZero(); // TODO: invert rotation matrix?
 
 			// Loop over all points in the output (i.e. rotated, or summed) array
-			//modify by zjw 2018.3.8, reduce unuse loop
-			for (long int k=STARTINGZ(sum_weight); k<=FINISHINGZ(sum_weight); k++){
-				r2_k = k*k;
-				if (r2_k > rmax2) break;
-				
-				for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++){
-					r2_i = r2_k + i*i;
-					if (r2_i > rmax2) break;
-					
-					for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++){
-						
-						r2 = r2_i + j*j;
-						if (r2 > rmax2) break;
-						x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
-						y = (RFLOAT)i;
-						z = (RFLOAT)k;
-						
+	        FOR_ALL_ELEMENTS_IN_ARRAY3D(sum_weight)
+	        {
 
-						// coords_output(x,y) = A * coords_input (xp,yp)
-						xp = x * R(0, 0) + y * R(0, 1) + z * R(0, 2);
-						yp = x * R(1, 0) + y * R(1, 1) + z * R(1, 2);
-						zp = x * R(2, 0) + y * R(2, 1) + z * R(2, 2);
+	        	x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
+	        	y = (RFLOAT)i;
+	        	z = (RFLOAT)k;
+	        	r2 = x*x + y*y + z*z;
+	        	if (r2 <= rmax2)
+	        	{
+	        		// coords_output(x,y) = A * coords_input (xp,yp)
+					xp = x * R(0, 0) + y * R(0, 1) + z * R(0, 2);
+					yp = x * R(1, 0) + y * R(1, 1) + z * R(1, 2);
+					zp = x * R(2, 0) + y * R(2, 1) + z * R(2, 2);
 
-						// Only asymmetric half is stored
-						if (xp < 0)
-						{
-							// Get complex conjugated hermitian symmetry pair
-							xp = -xp;
-							yp = -yp;
-							zp = -zp;
-							is_neg_x = true;
-						}
-						else
-						{
-							is_neg_x = false;
-						}
+					// Only asymmetric half is stored
+					if (xp < 0)
+					{
+						// Get complex conjugated hermitian symmetry pair
+						xp = -xp;
+						yp = -yp;
+						zp = -zp;
+						is_neg_x = true;
+					}
+					else
+					{
+						is_neg_x = false;
+					}
 
-						// Trilinear interpolation (with physical coords)
-						// Subtract STARTINGY and STARTINGZ to accelerate access to data (STARTINGX=0)
-						// In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
-						x0 = FLOOR(xp);
-						fx = xp - x0;
-						x1 = x0 + 1;
+					// Trilinear interpolation (with physical coords)
+					// Subtract STARTINGY and STARTINGZ to accelerate access to data (STARTINGX=0)
+					// In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
+	    			x0 = FLOOR(xp);
+					fx = xp - x0;
+					x1 = x0 + 1;
 
-						y0 = FLOOR(yp);
-						fy = yp - y0;
-						y0 -=  STARTINGY(data);
-						y1 = y0 + 1;
+					y0 = FLOOR(yp);
+					fy = yp - y0;
+					y0 -=  STARTINGY(data);
+					y1 = y0 + 1;
 
-						z0 = FLOOR(zp);
-						fz = zp - z0;
-						z0 -= STARTINGZ(data);
-						z1 = z0 + 1;
+					z0 = FLOOR(zp);
+					fz = zp - z0;
+					z0 -= STARTINGZ(data);
+					z1 = z0 + 1;
 
 #ifdef CHECK_SIZE
 					if (x0 < 0 || y0 < 0 || z0 < 0 ||
@@ -1432,68 +1399,68 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 						REPORT_ERROR("BackProjector::applyPointGroupSymmetry: checksize!!!");
 					}
 #endif
-						// First interpolate (complex) data
-						d000 = DIRECT_A3D_ELEM(data, z0, y0, x0);
-						d001 = DIRECT_A3D_ELEM(data, z0, y0, x1);
-						d010 = DIRECT_A3D_ELEM(data, z0, y1, x0);
-						d011 = DIRECT_A3D_ELEM(data, z0, y1, x1);
-						d100 = DIRECT_A3D_ELEM(data, z1, y0, x0);
-						d101 = DIRECT_A3D_ELEM(data, z1, y0, x1);
-						d110 = DIRECT_A3D_ELEM(data, z1, y1, x0);
-						d111 = DIRECT_A3D_ELEM(data, z1, y1, x1);
+					// First interpolate (complex) data
+					d000 = DIRECT_A3D_ELEM(data, z0, y0, x0);
+					d001 = DIRECT_A3D_ELEM(data, z0, y0, x1);
+					d010 = DIRECT_A3D_ELEM(data, z0, y1, x0);
+					d011 = DIRECT_A3D_ELEM(data, z0, y1, x1);
+					d100 = DIRECT_A3D_ELEM(data, z1, y0, x0);
+					d101 = DIRECT_A3D_ELEM(data, z1, y0, x1);
+					d110 = DIRECT_A3D_ELEM(data, z1, y1, x0);
+					d111 = DIRECT_A3D_ELEM(data, z1, y1, x1);
 
-						dx00 = LIN_INTERP(fx, d000, d001);
-						dx01 = LIN_INTERP(fx, d100, d101);
-						dx10 = LIN_INTERP(fx, d010, d011);
-						dx11 = LIN_INTERP(fx, d110, d111);
-						dxy0 = LIN_INTERP(fy, dx00, dx10);
-						dxy1 = LIN_INTERP(fy, dx01, dx11);
+					dx00 = LIN_INTERP(fx, d000, d001);
+					dx01 = LIN_INTERP(fx, d100, d101);
+					dx10 = LIN_INTERP(fx, d010, d011);
+					dx11 = LIN_INTERP(fx, d110, d111);
+					dxy0 = LIN_INTERP(fy, dx00, dx10);
+					dxy1 = LIN_INTERP(fy, dx01, dx11);
 
-						// Take complex conjugated for half with negative x
-						ddd = LIN_INTERP(fz, dxy0, dxy1);
+					// Take complex conjugated for half with negative x
+					ddd = LIN_INTERP(fz, dxy0, dxy1);
 
-						if (is_neg_x)
-							ddd = conj(ddd);
+					if (is_neg_x)
+						ddd = conj(ddd);
 
-						// Also apply a phase shift for helical translation along Z
-						if (ABS(helical_rise) > 0.)
-						{
-							RFLOAT zshift = hh * helical_rise;
-							zshift /= - ori_size * (RFLOAT)padding_factor;
-							RFLOAT dotp = 2 * PI * (z * zshift);
-							RFLOAT a = cos(dotp);
-							RFLOAT b = sin(dotp);
-							RFLOAT c = ddd.real;
-							RFLOAT d = ddd.imag;
-							RFLOAT ac = a * c;
-							RFLOAT bd = b * d;
-							RFLOAT ab_cd = (a + b) * (c + d);
-							ddd = Complex(ac - bd, ab_cd - ac - bd);
-						}
-						// Accumulated sum of the data term
-						A3D_ELEM(sum_data, k, i, j) += ddd;
-
-						// Then interpolate (real) weight
-						dd000 = DIRECT_A3D_ELEM(weight, z0, y0, x0);
-						dd001 = DIRECT_A3D_ELEM(weight, z0, y0, x1);
-						dd010 = DIRECT_A3D_ELEM(weight, z0, y1, x0);
-						dd011 = DIRECT_A3D_ELEM(weight, z0, y1, x1);
-						dd100 = DIRECT_A3D_ELEM(weight, z1, y0, x0);
-						dd101 = DIRECT_A3D_ELEM(weight, z1, y0, x1);
-						dd110 = DIRECT_A3D_ELEM(weight, z1, y1, x0);
-						dd111 = DIRECT_A3D_ELEM(weight, z1, y1, x1);
-
-						ddx00 = LIN_INTERP(fx, dd000, dd001);
-						ddx01 = LIN_INTERP(fx, dd100, dd101);
-						ddx10 = LIN_INTERP(fx, dd010, dd011);
-						ddx11 = LIN_INTERP(fx, dd110, dd111);
-						ddxy0 = LIN_INTERP(fy, ddx00, ddx10);
-						ddxy1 = LIN_INTERP(fy, ddx01, ddx11);
-
-						A3D_ELEM(sum_weight, k, i, j) +=  LIN_INTERP(fz, ddxy0, ddxy1);
+					// Also apply a phase shift for helical translation along Z
+					if (ABS(helical_rise) > 0.)
+					{
+						RFLOAT zshift = hh * helical_rise;
+						zshift /= - ori_size * (RFLOAT)padding_factor;
+						RFLOAT dotp = 2 * PI * (z * zshift);
+						RFLOAT a = cos(dotp);
+						RFLOAT b = sin(dotp);
+						RFLOAT c = ddd.real;
+						RFLOAT d = ddd.imag;
+						RFLOAT ac = a * c;
+						RFLOAT bd = b * d;
+						RFLOAT ab_cd = (a + b) * (c + d);
+						ddd = Complex(ac - bd, ab_cd - ac - bd);
 					}
-				}
-			
+					// Accumulated sum of the data term
+					A3D_ELEM(sum_data, k, i, j) += ddd;
+
+					// Then interpolate (real) weight
+					dd000 = DIRECT_A3D_ELEM(weight, z0, y0, x0);
+					dd001 = DIRECT_A3D_ELEM(weight, z0, y0, x1);
+					dd010 = DIRECT_A3D_ELEM(weight, z0, y1, x0);
+					dd011 = DIRECT_A3D_ELEM(weight, z0, y1, x1);
+					dd100 = DIRECT_A3D_ELEM(weight, z1, y0, x0);
+					dd101 = DIRECT_A3D_ELEM(weight, z1, y0, x1);
+					dd110 = DIRECT_A3D_ELEM(weight, z1, y1, x0);
+					dd111 = DIRECT_A3D_ELEM(weight, z1, y1, x1);
+
+					ddx00 = LIN_INTERP(fx, dd000, dd001);
+					ddx01 = LIN_INTERP(fx, dd100, dd101);
+					ddx10 = LIN_INTERP(fx, dd010, dd011);
+					ddx11 = LIN_INTERP(fx, dd110, dd111);
+					ddxy0 = LIN_INTERP(fy, ddx00, ddx10);
+					ddxy1 = LIN_INTERP(fy, ddx01, ddx11);
+
+					A3D_ELEM(sum_weight, k, i, j) +=  LIN_INTERP(fz, ddxy0, ddxy1);
+
+	        	} // end if r2 <= rmax2
+
 	        } // end loop over all elements of sum_weight
 
 		} // end if hh!=0
@@ -1520,7 +1487,7 @@ void BackProjector::applyPointGroupSymmetry()
 		Matrix2D<RFLOAT> L(4, 4), R(4, 4); // A matrix from the list
 		MultidimArray<RFLOAT> sum_weight;
 		MultidimArray<Complex > sum_data;
-        RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2, r2_k, r2_i;
+        RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
         bool is_neg_x;
         int x0, x1, y0, y1, z0, z1;
     	Complex d000, d001, d010, d011, d100, d101, d110, d111;
@@ -1538,60 +1505,52 @@ void BackProjector::applyPointGroupSymmetry()
 #ifdef DEBUG_SYMM
 	        std::cerr << " isym= " << isym << " R= " << R << std::endl;
 #endif
-           
+
 	        // Loop over all points in the output (i.e. rotated, or summed) array
-			//modify by zjw 2018.3.8, reduce unuse loop
-			for (long int k=STARTINGZ(sum_weight); k<=FINISHINGZ(sum_weight); k++){
-				r2_k = k*k;
-				if (r2_k > rmax2) break;
-				
-				for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++){
-					r2_i = r2_k + i*i;
-					if (r2_i > rmax2) break;
-					
-					for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++){
-						
-						r2 = r2_i + j*j;
-						if (r2 > rmax2) break;
-						x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
-						y = (RFLOAT)i;
-						z = (RFLOAT)k;
-						
-						// coords_output(x,y) = A * coords_input (xp,yp)
-						xp = x * R(0, 0) + y * R(0, 1) + z * R(0, 2);
-						yp = x * R(1, 0) + y * R(1, 1) + z * R(1, 2);
-						zp = x * R(2, 0) + y * R(2, 1) + z * R(2, 2);
+	        FOR_ALL_ELEMENTS_IN_ARRAY3D(sum_weight)
+	        {
 
-						// Only asymmetric half is stored
-						if (xp < 0)
-						{
-							// Get complex conjugated hermitian symmetry pair
-							xp = -xp;
-							yp = -yp;
-							zp = -zp;
-							is_neg_x = true;
-						}
-						else
-						{
-							is_neg_x = false;
-						}
+	        	x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
+	        	y = (RFLOAT)i;
+	        	z = (RFLOAT)k;
+	        	r2 = x*x + y*y + z*z;
+	        	if (r2 <= rmax2)
+	        	{
+	        		// coords_output(x,y) = A * coords_input (xp,yp)
+					xp = x * R(0, 0) + y * R(0, 1) + z * R(0, 2);
+					yp = x * R(1, 0) + y * R(1, 1) + z * R(1, 2);
+					zp = x * R(2, 0) + y * R(2, 1) + z * R(2, 2);
 
-						// Trilinear interpolation (with physical coords)
-						// Subtract STARTINGY and STARTINGZ to accelerate access to data (STARTINGX=0)
-						// In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
-						x0 = FLOOR(xp);
-						fx = xp - x0;
-						x1 = x0 + 1;
+					// Only asymmetric half is stored
+					if (xp < 0)
+					{
+						// Get complex conjugated hermitian symmetry pair
+						xp = -xp;
+						yp = -yp;
+						zp = -zp;
+						is_neg_x = true;
+					}
+					else
+					{
+						is_neg_x = false;
+					}
 
-						y0 = FLOOR(yp);
-						fy = yp - y0;
-						y0 -=  STARTINGY(data);
-						y1 = y0 + 1;
+					// Trilinear interpolation (with physical coords)
+					// Subtract STARTINGY and STARTINGZ to accelerate access to data (STARTINGX=0)
+					// In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
+	    			x0 = FLOOR(xp);
+					fx = xp - x0;
+					x1 = x0 + 1;
 
-						z0 = FLOOR(zp);
-						fz = zp - z0;
-						z0 -= STARTINGZ(data);
-						z1 = z0 + 1;
+					y0 = FLOOR(yp);
+					fy = yp - y0;
+					y0 -=  STARTINGY(data);
+					y1 = y0 + 1;
+
+					z0 = FLOOR(zp);
+					fz = zp - z0;
+					z0 -= STARTINGZ(data);
+					z1 = z0 + 1;
 
 #ifdef CHECK_SIZE
 					if (x0 < 0 || y0 < 0 || z0 < 0 ||
@@ -1605,50 +1564,49 @@ void BackProjector::applyPointGroupSymmetry()
 						REPORT_ERROR("BackProjector::applyPointGroupSymmetry: checksize!!!");
 					}
 #endif
-						// First interpolate (complex) data
-						d000 = DIRECT_A3D_ELEM(data, z0, y0, x0);
-						d001 = DIRECT_A3D_ELEM(data, z0, y0, x1);
-						d010 = DIRECT_A3D_ELEM(data, z0, y1, x0);
-						d011 = DIRECT_A3D_ELEM(data, z0, y1, x1);
-						d100 = DIRECT_A3D_ELEM(data, z1, y0, x0);
-						d101 = DIRECT_A3D_ELEM(data, z1, y0, x1);
-						d110 = DIRECT_A3D_ELEM(data, z1, y1, x0);
-						d111 = DIRECT_A3D_ELEM(data, z1, y1, x1);
+					// First interpolate (complex) data
+					d000 = DIRECT_A3D_ELEM(data, z0, y0, x0);
+					d001 = DIRECT_A3D_ELEM(data, z0, y0, x1);
+					d010 = DIRECT_A3D_ELEM(data, z0, y1, x0);
+					d011 = DIRECT_A3D_ELEM(data, z0, y1, x1);
+					d100 = DIRECT_A3D_ELEM(data, z1, y0, x0);
+					d101 = DIRECT_A3D_ELEM(data, z1, y0, x1);
+					d110 = DIRECT_A3D_ELEM(data, z1, y1, x0);
+					d111 = DIRECT_A3D_ELEM(data, z1, y1, x1);
 
-						dx00 = LIN_INTERP(fx, d000, d001);
-						dx01 = LIN_INTERP(fx, d100, d101);
-						dx10 = LIN_INTERP(fx, d010, d011);
-						dx11 = LIN_INTERP(fx, d110, d111);
-						dxy0 = LIN_INTERP(fy, dx00, dx10);
-						dxy1 = LIN_INTERP(fy, dx01, dx11);
+					dx00 = LIN_INTERP(fx, d000, d001);
+					dx01 = LIN_INTERP(fx, d100, d101);
+					dx10 = LIN_INTERP(fx, d010, d011);
+					dx11 = LIN_INTERP(fx, d110, d111);
+					dxy0 = LIN_INTERP(fy, dx00, dx10);
+					dxy1 = LIN_INTERP(fy, dx01, dx11);
 
-						// Take complex conjugated for half with negative x
-						if (is_neg_x)
-							A3D_ELEM(sum_data, k, i, j) += conj(LIN_INTERP(fz, dxy0, dxy1));
-						else
-							A3D_ELEM(sum_data, k, i, j) += LIN_INTERP(fz, dxy0, dxy1);
+					// Take complex conjugated for half with negative x
+					if (is_neg_x)
+						A3D_ELEM(sum_data, k, i, j) += conj(LIN_INTERP(fz, dxy0, dxy1));
+					else
+						A3D_ELEM(sum_data, k, i, j) += LIN_INTERP(fz, dxy0, dxy1);
 
-						// Then interpolate (real) weight
-						dd000 = DIRECT_A3D_ELEM(weight, z0, y0, x0);
-						dd001 = DIRECT_A3D_ELEM(weight, z0, y0, x1);
-						dd010 = DIRECT_A3D_ELEM(weight, z0, y1, x0);
-						dd011 = DIRECT_A3D_ELEM(weight, z0, y1, x1);
-						dd100 = DIRECT_A3D_ELEM(weight, z1, y0, x0);
-						dd101 = DIRECT_A3D_ELEM(weight, z1, y0, x1);
-						dd110 = DIRECT_A3D_ELEM(weight, z1, y1, x0);
-						dd111 = DIRECT_A3D_ELEM(weight, z1, y1, x1);
+					// Then interpolate (real) weight
+					dd000 = DIRECT_A3D_ELEM(weight, z0, y0, x0);
+					dd001 = DIRECT_A3D_ELEM(weight, z0, y0, x1);
+					dd010 = DIRECT_A3D_ELEM(weight, z0, y1, x0);
+					dd011 = DIRECT_A3D_ELEM(weight, z0, y1, x1);
+					dd100 = DIRECT_A3D_ELEM(weight, z1, y0, x0);
+					dd101 = DIRECT_A3D_ELEM(weight, z1, y0, x1);
+					dd110 = DIRECT_A3D_ELEM(weight, z1, y1, x0);
+					dd111 = DIRECT_A3D_ELEM(weight, z1, y1, x1);
 
-						ddx00 = LIN_INTERP(fx, dd000, dd001);
-						ddx01 = LIN_INTERP(fx, dd100, dd101);
-						ddx10 = LIN_INTERP(fx, dd010, dd011);
-						ddx11 = LIN_INTERP(fx, dd110, dd111);
-						ddxy0 = LIN_INTERP(fy, ddx00, ddx10);
-						ddxy1 = LIN_INTERP(fy, ddx01, ddx11);
+					ddx00 = LIN_INTERP(fx, dd000, dd001);
+					ddx01 = LIN_INTERP(fx, dd100, dd101);
+					ddx10 = LIN_INTERP(fx, dd010, dd011);
+					ddx11 = LIN_INTERP(fx, dd110, dd111);
+					ddxy0 = LIN_INTERP(fy, ddx00, ddx10);
+					ddxy1 = LIN_INTERP(fy, ddx01, ddx11);
 
-						A3D_ELEM(sum_weight, k, i, j) +=  LIN_INTERP(fz, ddxy0, ddxy1);
-					
-					}
-				}
+					A3D_ELEM(sum_weight, k, i, j) +=  LIN_INTERP(fz, ddxy0, ddxy1);
+
+	        	} // end if r2 <= rmax2
 
 	        } // end loop over all elements of sum_weight
 
