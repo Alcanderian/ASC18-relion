@@ -56,7 +56,7 @@
 #include "src/matrix2d.h"
 #include "src/complex.h"
 #include <limits>
-
+#include <x86intrin.h>
 
 extern int bestPrecision(float F, int _width);
 extern std::string floatToString(float F, int _width, int _prec);
