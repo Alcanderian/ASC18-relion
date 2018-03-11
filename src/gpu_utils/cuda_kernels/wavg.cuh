@@ -52,6 +52,8 @@ __global__ void cuda_kernel_wavg(
 	if (tid < 9)
 		s_eulers[tid] = g_eulers[bid*9+tid];
 
+	__syncthreads();
+
 	int tran_pass_num(translation_num / block_sz);
 	int remain_num(translation_num % block_sz);
 
@@ -63,6 +65,8 @@ __global__ void cuda_kernel_wavg(
 		if(DATA3D)
 			s_trans_y[pass]	= g_trans_y[pass * block_sz + tid];
 	}
+
+	__syncthreads();
 
 	if (tid < remain_num)
 	{

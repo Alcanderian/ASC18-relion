@@ -68,6 +68,9 @@ __global__ void cuda_kernel_backproject2D(
 	// end opt
 
 	//opt by ljx prefetch data
+
+	__syncthreads();
+	
 	int tran_pass_num(translation_num / BP_2D_BLOCK_SIZE);
 	int remain_num(translation_num % BP_2D_BLOCK_SIZE);
 
@@ -77,6 +80,8 @@ __global__ void cuda_kernel_backproject2D(
 		s_trans_x[pass]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
 		s_trans_y[pass]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
 	}
+
+	__syncthreads();
 
 	if (tid < remain_num)
 	{
