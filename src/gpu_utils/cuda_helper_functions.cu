@@ -464,7 +464,7 @@ void runBackProjectKernel(
 
 	if(BP.mdlZ==1)
 	{
-		cuda_kernel_backproject2D<<<imageCount,BP_2D_BLOCK_SIZE,(3*translation_num+9)*sizeof(XFLOAT),optStream>>>(
+		cuda_kernel_backproject2D<<<imageCount,BP_2D_BLOCK_SIZE,(3*translation_num)*sizeof(XFLOAT),optStream>>>(
 				d_img_real,
 				d_img_imag,
 				trans_x,
@@ -555,7 +555,7 @@ void runBackProjectKernel(
 		else
 		{
 			if(data_is_3D)
-				cuda_kernel_backproject3D<true><<<imageCount,BP_DATA3D_BLOCK_SIZE,0,optStream>>>(
+				cuda_kernel_backproject3D<true><<<imageCount,BP_DATA3D_BLOCK_SIZE,(4*translation_num)*sizeof(XFLOAT),optStream>>>(
 					d_img_real,
 					d_img_imag,
 					trans_x,
@@ -583,7 +583,7 @@ void runBackProjectKernel(
 					BP.mdlInitY,
 					BP.mdlInitZ);
 			else
-				cuda_kernel_backproject3D<false><<<imageCount,BP_REF3D_BLOCK_SIZE,0,optStream>>>(
+				cuda_kernel_backproject3D<false><<<imageCount,BP_REF3D_BLOCK_SIZE,(3*translation_num+1)*sizeof(XFLOAT),optStream>>>(
 					d_img_real,
 					d_img_imag,
 					trans_x,

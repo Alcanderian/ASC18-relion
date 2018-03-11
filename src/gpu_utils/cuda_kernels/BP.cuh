@@ -68,6 +68,9 @@ __global__ void cuda_kernel_backproject2D(
 	// end opt
 
 	//opt by ljx prefetch data
+
+	__syncthreads();
+	
 	int tran_pass_num(translation_num / BP_2D_BLOCK_SIZE);
 	int remain_num(translation_num % BP_2D_BLOCK_SIZE);
 
@@ -77,6 +80,8 @@ __global__ void cuda_kernel_backproject2D(
 		s_trans_x[pass]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
 		s_trans_y[pass]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
 	}
+
+	__syncthreads();
 
 	if (tid < remain_num)
 	{
@@ -226,10 +231,49 @@ __global__ void cuda_kernel_backproject3D(
 	__shared__ XFLOAT s_eulers[9];
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
+	int block_sz(0);
+	if(DATA3D)
+		block_sz = BP_DATA3D_BLOCK_SIZE;
+	else
+		block_sz = BP_REF3D_BLOCK_SIZE;
+
+	extern __shared__ XFLOAT buffer[];
+	//opt by ljx prefetch data
+	XFLOAT * s_weights			= &buffer[0];
+	XFLOAT * s_trans_x			= &buffer[translation_num];
+	XFLOAT * s_trans_y			= &buffer[2*translation_num];
+	XFLOAT * s_trans_z			= &buffer[3*translation_num];
+
 	if (tid < 9)
 		s_eulers[tid] = g_eulers[img*9+tid];
 
 	__syncthreads();
+
+	int tran_pass_num(translation_num / block_sz);
+	int remain_num(translation_num % block_sz);
+
+	for (unsigned pass = 0; pass < tran_pass_num; pass++)
+	{
+		s_weights[pass]		= g_weights[img * translation_num + pass * block_sz + tid];
+		s_trans_x[pass]		= g_trans_x[pass * block_sz + tid];
+		s_trans_y[pass]		= g_trans_y[pass * block_sz + tid];
+		if(DATA3D)
+			s_trans_y[pass]	= g_trans_y[pass * block_sz + tid];
+	}
+
+	__syncthreads();
+
+	if (tid < remain_num)
+	{
+		s_weights[tran_pass_num * block_sz + tid]		= g_weights[img * translation_num + tran_pass_num * block_sz + tid];
+		s_trans_x[tran_pass_num * block_sz + tid]		= g_trans_x[tran_pass_num * block_sz + tid];
+		s_trans_y[tran_pass_num * block_sz + tid]		= g_trans_y[tran_pass_num * block_sz + tid];
+		if(DATA3D)
+			s_trans_z[tran_pass_num * block_sz + tid]	= g_trans_z[tran_pass_num * block_sz + tid];
+	}
+
+	__syncthreads();
+
 
 	int pixel_pass_num(0);
 	if(DATA3D)
@@ -300,7 +344,7 @@ __global__ void cuda_kernel_backproject3D(
 
 		for (unsigned long itrans = 0; itrans < translation_num; itrans++)
 		{
-			weight = g_weights[img * translation_num + itrans];
+			weight = s_weights[itrans];
 
 			if (weight >= significant_weight)
 			{
@@ -308,9 +352,9 @@ __global__ void cuda_kernel_backproject3D(
 				Fweight += weight * ctf;
 
 				if(DATA3D)
-					translatePixel(x, y, z, g_trans_x[itrans], g_trans_y[itrans], g_trans_z[itrans], img_real, img_imag, temp_real, temp_imag);
+					translatePixel(x, y, z, s_trans_x[itrans], s_trans_y[itrans], s_trans_z[itrans], img_real, img_imag, temp_real, temp_imag);
 				else
-					translatePixel(x, y,    g_trans_x[itrans], g_trans_y[itrans],                    img_real, img_imag, temp_real, temp_imag);
+					translatePixel(x, y,    s_trans_x[itrans], s_trans_y[itrans],                    img_real, img_imag, temp_real, temp_imag);
 
 				real += temp_real * weight;
 				imag += temp_imag * weight;
@@ -363,49 +407,42 @@ __global__ void cuda_kernel_backproject3D(
 			XFLOAT mfy = (XFLOAT)1.0 - fy;
 			XFLOAT mfz = (XFLOAT)1.0 - fz;
 
+			XFLOAT dd111 =  fz *  fy *  fx;
+			XFLOAT dd110 =  fz *  fy * mfx;
+			XFLOAT dd101 =  fz * mfy *  fx;
 			XFLOAT dd000 = mfz * mfy * mfx;
+			XFLOAT dd001 = mfz * mfy *  fx;
+			XFLOAT dd010 = mfz *  fy * mfx;
+			XFLOAT dd011 = mfz *  fy *  fx;
+			XFLOAT dd100 =  fz * mfy * mfx;
 
 			cuda_atomic_add(&g_model_real  [z0 * mdl_x * mdl_y + y0 * mdl_x + x0], dd000 * real);
 			cuda_atomic_add(&g_model_imag  [z0 * mdl_x * mdl_y + y0 * mdl_x + x0], dd000 * imag);
 			cuda_atomic_add(&g_model_weight[z0 * mdl_x * mdl_y + y0 * mdl_x + x0], dd000 * Fweight);
 
-			XFLOAT dd001 = mfz * mfy *  fx;
-
 			cuda_atomic_add(&g_model_real  [z0 * mdl_x * mdl_y + y0 * mdl_x + x1], dd001 * real);
 			cuda_atomic_add(&g_model_imag  [z0 * mdl_x * mdl_y + y0 * mdl_x + x1], dd001 * imag);
 			cuda_atomic_add(&g_model_weight[z0 * mdl_x * mdl_y + y0 * mdl_x + x1], dd001 * Fweight);
-
-			XFLOAT dd010 = mfz *  fy * mfx;
-
+			
 			cuda_atomic_add(&g_model_real  [z0 * mdl_x * mdl_y + y1 * mdl_x + x0], dd010 * real);
 			cuda_atomic_add(&g_model_imag  [z0 * mdl_x * mdl_y + y1 * mdl_x + x0], dd010 * imag);
 			cuda_atomic_add(&g_model_weight[z0 * mdl_x * mdl_y + y1 * mdl_x + x0], dd010 * Fweight);
-
-			XFLOAT dd011 = mfz *  fy *  fx;
 
 			cuda_atomic_add(&g_model_real  [z0 * mdl_x * mdl_y + y1 * mdl_x + x1], dd011 * real);
 			cuda_atomic_add(&g_model_imag  [z0 * mdl_x * mdl_y + y1 * mdl_x + x1], dd011 * imag);
 			cuda_atomic_add(&g_model_weight[z0 * mdl_x * mdl_y + y1 * mdl_x + x1], dd011 * Fweight);
 
-			XFLOAT dd100 =  fz * mfy * mfx;
-
 			cuda_atomic_add(&g_model_real  [z1 * mdl_x * mdl_y + y0 * mdl_x + x0], dd100 * real);
 			cuda_atomic_add(&g_model_imag  [z1 * mdl_x * mdl_y + y0 * mdl_x + x0], dd100 * imag);
 			cuda_atomic_add(&g_model_weight[z1 * mdl_x * mdl_y + y0 * mdl_x + x0], dd100 * Fweight);
-
-			XFLOAT dd101 =  fz * mfy *  fx;
 
 			cuda_atomic_add(&g_model_real  [z1 * mdl_x * mdl_y + y0 * mdl_x + x1], dd101 * real);
 			cuda_atomic_add(&g_model_imag  [z1 * mdl_x * mdl_y + y0 * mdl_x + x1], dd101 * imag);
 			cuda_atomic_add(&g_model_weight[z1 * mdl_x * mdl_y + y0 * mdl_x + x1], dd101 * Fweight);
 
-			XFLOAT dd110 =  fz *  fy * mfx;
-
 			cuda_atomic_add(&g_model_real  [z1 * mdl_x * mdl_y + y1 * mdl_x + x0], dd110 * real);
 			cuda_atomic_add(&g_model_imag  [z1 * mdl_x * mdl_y + y1 * mdl_x + x0], dd110 * imag);
 			cuda_atomic_add(&g_model_weight[z1 * mdl_x * mdl_y + y1 * mdl_x + x0], dd110 * Fweight);
-
-			XFLOAT dd111 =  fz *  fy *  fx;
 
 			cuda_atomic_add(&g_model_real  [z1 * mdl_x * mdl_y + y1 * mdl_x + x1], dd111 * real);
 			cuda_atomic_add(&g_model_imag  [z1 * mdl_x * mdl_y + y1 * mdl_x + x1], dd111 * imag);
