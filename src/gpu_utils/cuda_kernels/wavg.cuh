@@ -43,8 +43,35 @@ __global__ void cuda_kernel_wavg(
 	XFLOAT * s_sumA2			= &buffer[2*block_sz];
 	XFLOAT * s_eulers           = &buffer[3*block_sz];
 
+	//opt by ljx prefetch data
+	XFLOAT * s_weights			= &buffer[3*block_sz+9];
+	XFLOAT * s_trans_x			= &buffer[3*block_sz+9+translation_num];
+	XFLOAT * s_trans_y			= &buffer[3*block_sz+9+2*translation_num];
+	XFLOAT * s_trans_z			= &buffer[3*block_sz+9+3*translation_num];
+
 	if (tid < 9)
 		s_eulers[tid] = g_eulers[bid*9+tid];
+
+	int tran_pass_num(translation_num / block_sz);
+	int remain_num(translation_num % block_sz);
+
+	for (unsigned pass = 0; pass < tran_pass_num; pass++)
+	{
+		s_weights[pass]		= g_weights[bid * translation_num + pass * block_sz + tid];
+		s_trans_x[pass]		= g_trans_x[pass * block_sz + tid];
+		s_trans_y[pass]		= g_trans_y[pass * block_sz + tid];
+		if(DATA3D)
+			s_trans_y[pass]	= g_trans_y[pass * block_sz + tid];
+	}
+
+	if (tid < remain_num)
+	{
+		s_weights[tran_pass_num * block_sz + tid]		= g_weights[bid * translation_num + tran_pass_num * block_sz + tid];
+		s_trans_x[tran_pass_num * block_sz + tid]		= g_trans_x[tran_pass_num * block_sz + tid];
+		s_trans_y[tran_pass_num * block_sz + tid]		= g_trans_y[tran_pass_num * block_sz + tid];
+		if(DATA3D)
+			s_trans_z[tran_pass_num * block_sz + tid]	= g_trans_z[tran_pass_num * block_sz + tid];
+	}
 	__syncthreads();
 
 	for (unsigned pass = 0; pass < pass_num; pass++) // finish a reference proj in each block
@@ -122,16 +149,16 @@ __global__ void cuda_kernel_wavg(
 
 			for (unsigned long itrans = 0; itrans < translation_num; itrans++)
 			{
-				XFLOAT weight = __ldg(&g_weights[bid * translation_num + itrans]);
+				XFLOAT weight = s_weights[itrans];
 
 				if (weight >= significant_weight)
 				{
 					weight /= weight_norm;
 
 					if(DATA3D)
-						translatePixel(x, y, z, g_trans_x[itrans], g_trans_y[itrans], g_trans_z[itrans], img_real, img_imag, trans_real, trans_imag);
+						translatePixel(x, y, z, s_trans_x[itrans], s_trans_y[itrans], s_trans_z[itrans], img_real, img_imag, trans_real, trans_imag);
 					else
-						translatePixel(x, y,    g_trans_x[itrans], g_trans_y[itrans],                    img_real, img_imag, trans_real, trans_imag);
+						translatePixel(x, y,    s_trans_x[itrans], s_trans_y[itrans],                    img_real, img_imag, trans_real, trans_imag);
 
 					XFLOAT diff_real = ref_real - trans_real;
 					XFLOAT diff_imag = ref_imag - trans_imag;

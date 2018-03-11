@@ -14,7 +14,6 @@
 /*
  *   	BP KERNELS
  */
-
 __global__ void cuda_kernel_backproject2D(
 		XFLOAT *g_img_real,
 		XFLOAT *g_img_imag,
@@ -44,6 +43,11 @@ __global__ void cuda_kernel_backproject2D(
 
 	__shared__ XFLOAT s_eulers[4];
 
+	extern __shared__ XFLOAT buffer[];
+	XFLOAT * s_weights	= &buffer[0];
+	XFLOAT * s_trans_x	= &buffer[translation_num];
+	XFLOAT * s_trans_y	= &buffer[2*translation_num];
+
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
 	// opt by ljx 2018.3.7, make less if-branch
@@ -62,6 +66,24 @@ __global__ void cuda_kernel_backproject2D(
 	//if (tid < 4)
 	//	s_eulers[tid] = g_eulers[img*9+tid+(tid>>1)] * padding_factor;
 	// end opt
+
+	//opt by ljx prefetch data
+	int tran_pass_num(translation_num / BP_2D_BLOCK_SIZE);
+	int remain_num(translation_num % BP_2D_BLOCK_SIZE);
+
+	for (unsigned pass = 0; pass < tran_pass_num; pass++)
+	{
+		s_weights[pass]	= g_weights[img * translation_num + pass * BP_2D_BLOCK_SIZE + tid];
+		s_trans_x[pass]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
+		s_trans_y[pass]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
+	}
+
+	if (tid < remain_num)
+	{
+		s_weights[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= g_weights[img * translation_num + tran_pass_num * BP_2D_BLOCK_SIZE + tid];
+		s_trans_x[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= g_trans_x[tran_pass_num * BP_2D_BLOCK_SIZE + tid];
+		s_trans_y[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= g_trans_y[tran_pass_num * BP_2D_BLOCK_SIZE + tid];
+	}
 
 	__syncthreads();
 
@@ -102,14 +124,14 @@ __global__ void cuda_kernel_backproject2D(
 
 		for (unsigned long itrans = 0; itrans < translation_num; itrans++)
 		{
-			weight = g_weights[img * translation_num + itrans];
+			weight = s_weights[itrans];
 
 			if (weight >= significant_weight)
 			{
 				weight = (weight / weight_norm) * ctf * minvsigma2;
 				Fweight += weight * ctf;
 
-				translatePixel(x, y, g_trans_x[itrans], g_trans_y[itrans], img_real, img_imag, temp_real, temp_imag);
+				translatePixel(x, y, s_trans_x[itrans], s_trans_y[itrans], img_real, img_imag, temp_real, temp_imag);
 
 				real += temp_real * weight;
 				imag += temp_imag * weight;
