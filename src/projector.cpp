@@ -576,7 +576,8 @@ void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool
 				REPORT_ERROR("Unrecognized interpolator in Projector::project");
 		} // endif x-loop
 	} // endif y-loop
-}*/
+}
+*/
 //modify by zjw 2019.3.11 vectorized the loop
 void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool inv)
 {
@@ -621,9 +622,15 @@ void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool
 		y = i;
         y2 = y*y;
         // Only include points with radius < max_r (exclude points outside circle in square)
-        int edx2 = (int)sqrt(max_r2 - y2);
-        int edx1 = (int)sqrt(min_r2_nn - y2);
-        if (edx1*edx1 + y2 < min_r2_nn) edx1++;
+        int edx2 = max_r2 - y2;
+        int edx1 = min_r2_nn - y2;
+		if (edx1 > 0){
+			edx1 = (int)sqrt(edx1);
+			if (edx1*edx1 + y2 < min_r2_nn) edx1++;
+		}
+		else edx1=0;
+		if (edx2>0)edx2 = (int)sqrt(edx2);
+		
 		edx1 = XMIPP_MIN(edx1, my_r_max+1);
 		edx2 = XMIPP_MIN(edx2, my_r_max);
 #pragma ivdep
@@ -736,9 +743,15 @@ void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool
 	{
         y = i - YSIZE(f2d);
 		y2 = y * y;
-        int edx2 = (int)sqrt(max_r2 - y2);
-        int edx1 = (int)sqrt(min_r2_nn - y2);
-        if (edx1*edx1 + y2 < min_r2_nn) edx1++;
+        int edx2 = max_r2 - y2;
+        int edx1 = min_r2_nn - y2;
+		if (edx1 > 0){
+			edx1 = (int)sqrt(edx1);
+			if (edx1*edx1 + y2 < min_r2_nn) edx1++;
+		}
+		else edx1 = 0;
+		if (edx2>0)edx2 = (int)sqrt(edx2);
+		
 		edx1 = XMIPP_MIN(edx1, my_r_max+1);
 		edx2 = XMIPP_MIN(edx2, my_r_max);
 #pragma ivdep
@@ -846,6 +859,7 @@ void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool
         } // endif NEAREST_NEIGHBOUR		
 	} // endif y-loop
 }
+
 
 
 
