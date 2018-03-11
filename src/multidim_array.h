@@ -56,7 +56,7 @@
 #include "src/matrix2d.h"
 #include "src/complex.h"
 #include <limits>
-
+#include <x86intrin.h>
 
 extern int bestPrecision(float F, int _width);
 extern std::string floatToString(float F, int _width, int _prec);
@@ -497,6 +497,16 @@ public:
 public:
     /// @name Constructors
     //@{
+	
+	//add by zjw 2018.3.10 align memory allocation with 64 type
+	void *operator new(size_t size)
+    {
+		return _mm_malloc(size, 64);
+    }
+    void operator delete(void *p)
+    {
+		_mm_free(p);
+    }
 
     /** Empty constructor.
      * The empty constructor creates an array with no memory associated,

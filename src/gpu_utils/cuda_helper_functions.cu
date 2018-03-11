@@ -306,7 +306,7 @@ void runWavgKernel(
 	if (refs_are_ctf_corrected)
 	{
 		if(data_is_3D)
-			cuda_kernel_wavg<true,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<true,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(4*translation_num+3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -327,7 +327,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else if (projector.mdlZ!=0)
-			cuda_kernel_wavg<true,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<true,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -348,7 +348,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else
-			cuda_kernel_wavg<true,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<true,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -372,7 +372,7 @@ void runWavgKernel(
 	else
 	{
 		if(data_is_3D)
-			cuda_kernel_wavg<false,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<false,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(4*translation_num+3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -393,7 +393,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else if (projector.mdlZ!=0)
-			cuda_kernel_wavg<false,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<false,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -414,7 +414,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else
-			cuda_kernel_wavg<false,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<false,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -464,7 +464,7 @@ void runBackProjectKernel(
 
 	if(BP.mdlZ==1)
 	{
-		cuda_kernel_backproject2D<<<imageCount,BP_2D_BLOCK_SIZE,0,optStream>>>(
+		cuda_kernel_backproject2D<<<imageCount,BP_2D_BLOCK_SIZE,(3*translation_num+9)*sizeof(XFLOAT),optStream>>>(
 				d_img_real,
 				d_img_imag,
 				trans_x,
