@@ -462,7 +462,7 @@ void Projector::project(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool 
     std::cerr << "done with project..." << std::endl;
 #endif
 }
-
+/*
 void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool inv)
 {
 	RFLOAT fx, fy, xp, yp;
@@ -576,7 +576,278 @@ void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool
 				REPORT_ERROR("Unrecognized interpolator in Projector::project");
 		} // endif x-loop
 	} // endif y-loop
+}*/
+//modify by zjw 2019.3.11 vectorized the loop
+void Projector::rotate2D(MultidimArray<Complex > &f2d, Matrix2D<RFLOAT> &A, bool inv)
+{
+	RFLOAT fx, fy, xp, yp;
+	int x0, x1, y0, y1, y, y2, r2;
+	bool is_neg_x;
+	Complex d00, d01, d10, d11, dx0, dx1;
+	Matrix2D<RFLOAT> Ainv;
+
+    // f2d should already be in the right size (ori_size,orihalfdim)
+    // AND the points outside max_r should already be zero...
+    // f2d.initZeros();
+	// Use the inverse matrix
+    if (inv)
+    	Ainv = A;
+    else
+    	Ainv = A.transpose();
+
+    // The f2d image may be smaller than r_max, in that case also make sure not to fill the corners!
+    int my_r_max = XMIPP_MIN(r_max, XSIZE(f2d) - 1);
+
+    // Go from the 2D slice coordinates to the map coordinates
+    Ainv *= (RFLOAT)padding_factor;  // take scaling into account directly
+    int max_r2 = my_r_max * my_r_max;
+    int min_r2_nn = r_min_nn * r_min_nn;
+    int edy1 = XMIPP_MIN(YSIZE(f2d)-1, my_r_max);
+	int sty2 = XMIPP_MAX(YSIZE(f2d) - my_r_max, edy1 + 1);
+
+#ifdef DEBUG
+    std::cerr << " XSIZE(f2d)= "<< XSIZE(f2d) << std::endl;
+    std::cerr << " YSIZE(f2d)= "<< YSIZE(f2d) << std::endl;
+    std::cerr << " XSIZE(data)= "<< XSIZE(data) << std::endl;
+    std::cerr << " YSIZE(data)= "<< YSIZE(data) << std::endl;
+    std::cerr << " STARTINGX(data)= "<< STARTINGX(data) << std::endl;
+    std::cerr << " STARTINGY(data)= "<< STARTINGY(data) << std::endl;
+    std::cerr << " STARTINGZ(data)= "<< STARTINGZ(data) << std::endl;
+    std::cerr << " max_r= "<< r_max << std::endl;
+    std::cerr << " Ainv= " << Ainv << std::endl;
+#endif
+
+    for (int i=0; i<=edy1; i++){
+		y = i;
+        y2 = y*y;
+        // Only include points with radius < max_r (exclude points outside circle in square)
+        int edx2 = (int)sqrt(max_r2 - y2);
+        int edx1 = (int)sqrt(min_r2_nn - y2);
+        if (edx1*edx1 + y2 < min_r2_nn) edx1++;
+		edx1 = XMIPP_MIN(edx1, my_r_max+1);
+		edx2 = XMIPP_MIN(edx2, my_r_max);
+#pragma ivdep
+        for (int x=0; x<edx1; x++){
+            // Only include points with radius < max_r (exclude points outside circle in square)
+            r2 = x * x + y2;
+            // Get logical coordinates in the 3D map
+			xp = Ainv(0,0) * x + Ainv(0,1) * y;
+			yp = Ainv(1,0) * x + Ainv(1,1) * y;
+            if (xp < 0){
+				// Get complex conjugated hermitian symmetry pair
+				xp = -xp;
+				yp = -yp;
+				is_neg_x = true;
+			}
+			else{
+				is_neg_x = false;
+			}
+            // Trilinear interpolation (with physical coords)
+			// Subtract STARTINGY to accelerate access to data (STARTINGX=0)
+			// In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
+    		x0 = FLOOR(xp);
+			fx = xp - x0;
+			x1 = x0 + 1;
+
+			y0 = FLOOR(yp);
+			fy = yp - y0;
+			y0 -=  STARTINGY(data);
+			y1 = y0 + 1;
+
+			// Matrix access can be accelerated through pre-calculation of z0*xydim etc.
+			d00 = DIRECT_A2D_ELEM(data, y0, x0);
+			d01 = DIRECT_A2D_ELEM(data, y0, x1);
+			d10 = DIRECT_A2D_ELEM(data, y1, x0);
+			d11 = DIRECT_A2D_ELEM(data, y1, x1);
+
+			// Set the interpolated value in the 2D output array
+			dx0 = LIN_INTERP(fx, d00, d01);
+			dx1 = LIN_INTERP(fx, d10, d11);
+			DIRECT_A2D_ELEM(f2d, i, x) = LIN_INTERP(fy, dx0, dx1);
+			// Take complex conjugated for half with negative x
+			if (is_neg_x)
+				DIRECT_A2D_ELEM(f2d, i, x) = conj(DIRECT_A2D_ELEM(f2d, i, x));
+        } // endif x-loop
+
+        if (interpolator != TRILINEAR && interpolator != NEAREST_NEIGHBOUR){
+            REPORT_ERROR("Unrecognized interpolator in Projector::project");
+        }
+        else if (interpolator == TRILINEAR){
+#pragma ivdep
+            for (int x=edx1; x<=edx2; x++){
+                r2 = x * x + y2;
+                // Get logical coordinates in the 3D map
+			    xp = Ainv(0,0) * x + Ainv(0,1) * y;
+			    yp = Ainv(1,0) * x + Ainv(1,1) * y;
+                if (xp < 0){
+				    // Get complex conjugated hermitian symmetry pair
+				    xp = -xp;
+				    yp = -yp;
+				    is_neg_x = true;
+			    }
+			    else{
+				    is_neg_x = false;
+			    }
+                // Trilinear interpolation (with physical coords)
+			    // Subtract STARTINGY to accelerate access to data (STARTINGX=0)
+			    // In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
+    		    x0 = FLOOR(xp);
+			    fx = xp - x0;
+			    x1 = x0 + 1;
+
+			    y0 = FLOOR(yp);
+			    fy = yp - y0;
+			    y0 -=  STARTINGY(data);
+			    y1 = y0 + 1;
+
+			    // Matrix access can be accelerated through pre-calculation of z0*xydim etc.
+			    d00 = DIRECT_A2D_ELEM(data, y0, x0);
+			    d01 = DIRECT_A2D_ELEM(data, y0, x1);
+			    d10 = DIRECT_A2D_ELEM(data, y1, x0);
+			    d11 = DIRECT_A2D_ELEM(data, y1, x1);
+
+			    // Set the interpolated value in the 2D output array
+			    dx0 = LIN_INTERP(fx, d00, d01);
+			    dx1 = LIN_INTERP(fx, d10, d11);
+			    DIRECT_A2D_ELEM(f2d, i, x) = LIN_INTERP(fy, dx0, dx1);
+			    // Take complex conjugated for half with negative x
+			    if (is_neg_x)
+				    DIRECT_A2D_ELEM(f2d, i, x) = conj(DIRECT_A2D_ELEM(f2d, i, x));
+            } // endif x-loop         
+        } // endif TRILINEAR
+        else if (interpolator == NEAREST_NEIGHBOUR){
+#pragma ivdep
+            for (int x=edx1; x<=edx2; x++){
+                // Get logical coordinates in the 3D map
+			    xp = Ainv(0,0) * x + Ainv(0,1) * y;
+			    yp = Ainv(1,0) * x + Ainv(1,1) * y;
+                x0 = ROUND(xp);
+				y0 = ROUND(yp);
+				if (x0 < 0)
+					DIRECT_A2D_ELEM(f2d, i, x) = conj(A2D_ELEM(data, -y0, -x0));
+				else
+					DIRECT_A2D_ELEM(f2d, i, x) = A2D_ELEM(data, y0, x0);
+            } // endif x-loop
+        } // endif NEAREST_NEIGHBOUR
+
+    }// endif y1-loop
+
+	for (int i=sty2; i < YSIZE(f2d); i++)
+	{
+        y = i - YSIZE(f2d);
+		y2 = y * y;
+        int edx2 = (int)sqrt(max_r2 - y2);
+        int edx1 = (int)sqrt(min_r2_nn - y2);
+        if (edx1*edx1 + y2 < min_r2_nn) edx1++;
+		edx1 = XMIPP_MIN(edx1, my_r_max+1);
+		edx2 = XMIPP_MIN(edx2, my_r_max);
+#pragma ivdep
+        for (int x=0; x<edx1; x++){
+            // Only include points with radius < max_r (exclude points outside circle in square)
+            r2 = x * x + y2;
+            // Get logical coordinates in the 3D map
+			xp = Ainv(0,0) * x + Ainv(0,1) * y;
+			yp = Ainv(1,0) * x + Ainv(1,1) * y;
+            if (xp < 0){
+				// Get complex conjugated hermitian symmetry pair
+				xp = -xp;
+				yp = -yp;
+				is_neg_x = true;
+			}
+			else{
+				is_neg_x = false;
+			}
+            // Trilinear interpolation (with physical coords)
+			// Subtract STARTINGY to accelerate access to data (STARTINGX=0)
+			// In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
+    		x0 = FLOOR(xp);
+			fx = xp - x0;
+			x1 = x0 + 1;
+
+			y0 = FLOOR(yp);
+			fy = yp - y0;
+			y0 -=  STARTINGY(data);
+			y1 = y0 + 1;
+
+			// Matrix access can be accelerated through pre-calculation of z0*xydim etc.
+			d00 = DIRECT_A2D_ELEM(data, y0, x0);
+			d01 = DIRECT_A2D_ELEM(data, y0, x1);
+			d10 = DIRECT_A2D_ELEM(data, y1, x0);
+			d11 = DIRECT_A2D_ELEM(data, y1, x1);
+
+			// Set the interpolated value in the 2D output array
+			dx0 = LIN_INTERP(fx, d00, d01);
+			dx1 = LIN_INTERP(fx, d10, d11);
+			DIRECT_A2D_ELEM(f2d, i, x) = LIN_INTERP(fy, dx0, dx1);
+			// Take complex conjugated for half with negative x
+			if (is_neg_x)
+				DIRECT_A2D_ELEM(f2d, i, x) = conj(DIRECT_A2D_ELEM(f2d, i, x));
+        } // endif x-loop
+
+        if (interpolator != TRILINEAR && interpolator != NEAREST_NEIGHBOUR){
+            REPORT_ERROR("Unrecognized interpolator in Projector::project");
+        }
+        else if (interpolator == TRILINEAR){
+#pragma ivdep
+            for (int x=edx1; x<=edx2; x++){
+                r2 = x * x + y2;
+                // Get logical coordinates in the 3D map
+			    xp = Ainv(0,0) * x + Ainv(0,1) * y;
+			    yp = Ainv(1,0) * x + Ainv(1,1) * y;
+                if (xp < 0){
+				    // Get complex conjugated hermitian symmetry pair
+				    xp = -xp;
+				    yp = -yp;
+				    is_neg_x = true;
+			    }
+			    else{
+				    is_neg_x = false;
+			    }
+                // Trilinear interpolation (with physical coords)
+			    // Subtract STARTINGY to accelerate access to data (STARTINGX=0)
+			    // In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
+    		    x0 = FLOOR(xp);
+			    fx = xp - x0;
+			    x1 = x0 + 1;
+
+			    y0 = FLOOR(yp);
+			    fy = yp - y0;
+			    y0 -=  STARTINGY(data);
+			    y1 = y0 + 1;
+
+			    // Matrix access can be accelerated through pre-calculation of z0*xydim etc.
+			    d00 = DIRECT_A2D_ELEM(data, y0, x0);
+			    d01 = DIRECT_A2D_ELEM(data, y0, x1);
+			    d10 = DIRECT_A2D_ELEM(data, y1, x0);
+			    d11 = DIRECT_A2D_ELEM(data, y1, x1);
+
+			    // Set the interpolated value in the 2D output array
+			    dx0 = LIN_INTERP(fx, d00, d01);
+			    dx1 = LIN_INTERP(fx, d10, d11);
+			    DIRECT_A2D_ELEM(f2d, i, x) = LIN_INTERP(fy, dx0, dx1);
+			    // Take complex conjugated for half with negative x
+			    if (is_neg_x)
+				    DIRECT_A2D_ELEM(f2d, i, x) = conj(DIRECT_A2D_ELEM(f2d, i, x));
+            } // endif x-loop         
+        } // endif TRILINEAR
+        else if (interpolator == NEAREST_NEIGHBOUR){
+#pragma ivdep
+            for (int x=edx1; x<=edx2; x++){
+                // Get logical coordinates in the 3D map
+			    xp = Ainv(0,0) * x + Ainv(0,1) * y;
+			    yp = Ainv(1,0) * x + Ainv(1,1) * y;
+                x0 = ROUND(xp);
+				y0 = ROUND(yp);
+				if (x0 < 0)
+					DIRECT_A2D_ELEM(f2d, i, x) = conj(A2D_ELEM(data, -y0, -x0));
+				else
+					DIRECT_A2D_ELEM(f2d, i, x) = A2D_ELEM(data, y0, x0);
+            } // endif x-loop
+        } // endif NEAREST_NEIGHBOUR		
+	} // endif y-loop
 }
+
+
 
 
 void Projector::rotate3D(MultidimArray<Complex > &f3d, Matrix2D<RFLOAT> &A, bool inv)
