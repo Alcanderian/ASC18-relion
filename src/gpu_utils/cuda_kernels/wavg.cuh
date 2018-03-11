@@ -86,98 +86,97 @@ __global__ void cuda_kernel_wavg(
 
 		pixel = pass * block_sz + tid;
 
-		if(pixel<image_size)
+		if(pixel >= image_size)
+			break;
+		int x,y,z,xy;
+		if(DATA3D)
 		{
-			int x,y,z,xy;
-			if(DATA3D)
+			z =  floorfracf(pixel, projector.imgX*projector.imgY);
+			xy = pixel % (projector.imgX*projector.imgY);
+			x =             xy  % projector.imgX;
+			y = floorfracf( xy,   projector.imgX);
+			if (z > projector.maxR)
 			{
-				z =  floorfracf(pixel, projector.imgX*projector.imgY);
-				xy = pixel % (projector.imgX*projector.imgY);
-				x =             xy  % projector.imgX;
-				y = floorfracf( xy,   projector.imgX);
-				if (z > projector.maxR)
-				{
-					if (z >= projector.imgZ - projector.maxR)
-						z = z - projector.imgZ;
-					else
-						x = projector.maxR;
-				}
-			}
-			else
-			{
-				x =             pixel % projector.imgX;
-				y = floorfracf( pixel , projector.imgX);
-			}
-			if (y > projector.maxR)
-			{
-				if (y >= projector.imgY - projector.maxR)
-					y = y - projector.imgY;
+				if (z >= projector.imgZ - projector.maxR)
+					z = z - projector.imgZ;
 				else
 					x = projector.maxR;
 			}
-
-			if(DATA3D)
-				projector.project3Dmodel(
-					x,y,z,
-					s_eulers[0], s_eulers[1], s_eulers[2],
-					s_eulers[3], s_eulers[4], s_eulers[5],
-					s_eulers[6], s_eulers[7], s_eulers[8],
-					ref_real, ref_imag);
-			else if(REF3D)
-				projector.project3Dmodel(
-					x,y,
-					s_eulers[0], s_eulers[1],
-					s_eulers[3], s_eulers[4],
-					s_eulers[6], s_eulers[7],
-					ref_real, ref_imag);
-			else
-				projector.project2Dmodel(
-						x,y,
-					s_eulers[0], s_eulers[1],
-					s_eulers[3], s_eulers[4],
-					ref_real, ref_imag);
-
-			if (REFCTF)
-			{
-				ref_real *= __ldg(&g_ctfs[pixel]);
-				ref_imag *= __ldg(&g_ctfs[pixel]);
-			}
-			else
-			{
-				ref_real *= part_scale;
-				ref_imag *= part_scale;
-			}
-
-			img_real = __ldg(&g_img_real[pixel]);
-			img_imag = __ldg(&g_img_imag[pixel]);
-
-			for (unsigned long itrans = 0; itrans < translation_num; itrans++)
-			{
-				XFLOAT weight = s_weights[itrans];
-
-				if (weight >= significant_weight)
-				{
-					weight /= weight_norm;
-
-					if(DATA3D)
-						translatePixel(x, y, z, s_trans_x[itrans], s_trans_y[itrans], s_trans_z[itrans], img_real, img_imag, trans_real, trans_imag);
-					else
-						translatePixel(x, y,    s_trans_x[itrans], s_trans_y[itrans],                    img_real, img_imag, trans_real, trans_imag);
-
-					XFLOAT diff_real = ref_real - trans_real;
-					XFLOAT diff_imag = ref_imag - trans_imag;
-
-					s_wdiff2s_parts[tid] += weight * (diff_real*diff_real + diff_imag*diff_imag);
-
-					s_sumXA[tid] +=  weight * ( ref_real * trans_real + ref_imag * trans_imag);
-					s_sumA2[tid] +=  weight * ( ref_real*ref_real  +  ref_imag*ref_imag );
-				}
-			}
-
-			cuda_atomic_add(&g_wdiff2s_XA[pixel], s_sumXA[tid]);
-			cuda_atomic_add(&g_wdiff2s_AA[pixel], s_sumA2[tid]);
-			cuda_atomic_add(&g_wdiff2s_parts[pixel], s_wdiff2s_parts[tid]);
 		}
+		else
+		{
+			x =             pixel % projector.imgX;
+			y = floorfracf( pixel , projector.imgX);
+		}
+		if (y > projector.maxR)
+		{
+			if (y >= projector.imgY - projector.maxR)
+				y = y - projector.imgY;
+			else
+				x = projector.maxR;
+		}
+
+		if(DATA3D)
+			projector.project3Dmodel(
+				x,y,z,
+				s_eulers[0], s_eulers[1], s_eulers[2],
+				s_eulers[3], s_eulers[4], s_eulers[5],
+				s_eulers[6], s_eulers[7], s_eulers[8],
+				ref_real, ref_imag);
+		else if(REF3D)
+			projector.project3Dmodel(
+				x,y,
+				s_eulers[0], s_eulers[1],
+				s_eulers[3], s_eulers[4],
+				s_eulers[6], s_eulers[7],
+				ref_real, ref_imag);
+		else
+			projector.project2Dmodel(
+					x,y,
+				s_eulers[0], s_eulers[1],
+				s_eulers[3], s_eulers[4],
+				ref_real, ref_imag);
+
+		if (REFCTF)
+		{
+			ref_real *= __ldg(&g_ctfs[pixel]);
+			ref_imag *= __ldg(&g_ctfs[pixel]);
+		}
+		else
+		{
+			ref_real *= part_scale;
+			ref_imag *= part_scale;
+		}
+
+		img_real = __ldg(&g_img_real[pixel]);
+		img_imag = __ldg(&g_img_imag[pixel]);
+
+		for (unsigned long itrans = 0; itrans < translation_num; itrans++)
+		{
+			XFLOAT weight = s_weights[itrans];
+
+			if (weight >= significant_weight)
+			{
+				weight /= weight_norm;
+
+				if(DATA3D)
+					translatePixel(x, y, z, s_trans_x[itrans], s_trans_y[itrans], s_trans_z[itrans], img_real, img_imag, trans_real, trans_imag);
+				else
+					translatePixel(x, y,    s_trans_x[itrans], s_trans_y[itrans],                    img_real, img_imag, trans_real, trans_imag);
+
+				XFLOAT diff_real = ref_real - trans_real;
+				XFLOAT diff_imag = ref_imag - trans_imag;
+
+				s_wdiff2s_parts[tid] += weight * (diff_real*diff_real + diff_imag*diff_imag);
+
+				s_sumXA[tid] +=  weight * ( ref_real * trans_real + ref_imag * trans_imag);
+				s_sumA2[tid] +=  weight * ( ref_real*ref_real  +  ref_imag*ref_imag );
+			}
+		}
+
+		cuda_atomic_add(&g_wdiff2s_XA[pixel], s_sumXA[tid]);
+		cuda_atomic_add(&g_wdiff2s_AA[pixel], s_sumA2[tid]);
+		cuda_atomic_add(&g_wdiff2s_parts[pixel], s_wdiff2s_parts[tid]);
 	}
 }
 
