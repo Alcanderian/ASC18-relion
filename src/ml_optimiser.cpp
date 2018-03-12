@@ -6827,7 +6827,7 @@ void MlOptimiser::storeWeightedSums(long int my_ori_particle, int ibody, int exp
 											}*/
 											//modify by zjw 2018.3.12, vectorized the loop
 											RFLOAT my_wdiff2[NZYXSIZE(Mresol_fine)];
-#pragma ivedp
+#pragma ivdep
 											for (long int n=0; n<NZYXSIZE(Mresol_fine); ++n){
 												int ires = DIRECT_MULTIDIM_ELEM(Mresol_fine, n);
 												if (ires > -1)
@@ -6837,7 +6837,7 @@ void MlOptimiser::storeWeightedSums(long int my_ori_particle, int ibody, int exp
 													my_wdiff2[n] = weight * (diff_real*diff_real + diff_imag*diff_imag);
 												}
 											}
-#pragma ivedp
+#pragma ivdep
 											for (long int n=0; n<NZYXSIZE(Mresol_fine); ++n){
 												int ires = DIRECT_MULTIDIM_ELEM(Mresol_fine, n);
 												if (ires > -1)
@@ -6859,7 +6859,7 @@ void MlOptimiser::storeWeightedSums(long int my_ori_particle, int ibody, int exp
 														do_scale_correction_ires[cnt] = ires;
 													}
 												}
-#pragma ivedp
+#pragma ivdep
 												for (long int my_n=0; my_n <= cnt; ++my_n){
 													int n = do_scale_correction[my_n];
 													int ires = do_scale_correction_ires[my_n];
