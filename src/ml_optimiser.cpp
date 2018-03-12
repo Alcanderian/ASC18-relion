@@ -6850,8 +6850,8 @@ void MlOptimiser::storeWeightedSums(long int my_ori_particle, int ibody, int exp
 											}
 											if (do_scale_correction){
 												long int cnt = -1;
-												long int do_scale_correction_n[NZYXSIZE(Mresol_fine)];
-												long int do_scale_correction_ires[NZYXSIZE(Mresol_fine)];
+												int do_scale_correction_n[NZYXSIZE(Mresol_fine)];
+												int do_scale_correction_ires[NZYXSIZE(Mresol_fine)];
 												for (long int n=0; n<NZYXSIZE(Mresol_fine); ++n){
 													int ires = DIRECT_MULTIDIM_ELEM(Mresol_fine, n);
 													if (ires > -1 && DIRECT_A1D_ELEM(mymodel.data_vs_prior_class[exp_iclass], ires) > 3.){
@@ -6861,7 +6861,7 @@ void MlOptimiser::storeWeightedSums(long int my_ori_particle, int ibody, int exp
 												}
 #pragma ivdep
 												for (long int my_n=0; my_n <= cnt; ++my_n){
-													int n = do_scale_correction[my_n];
+													int n = do_scale_correction_n[my_n];
 													int ires = do_scale_correction_ires[my_n];
 													RFLOAT sumXA, sumA2;
 													sumXA = (DIRECT_MULTIDIM_ELEM(Frefctf, n)).real * (*(Fimg_shift + n)).real;
