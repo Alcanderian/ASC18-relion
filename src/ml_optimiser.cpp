@@ -6799,6 +6799,7 @@ void MlOptimiser::storeWeightedSums(long int my_ori_particle, int ibody, int exp
 
 											// Store weighted sum of squared differences for sigma2_noise estimation
 											// Suggestion Robert Sinkovitz: merge difference and scale steps to make better use of cache
+											/*
 											FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(Mresol_fine)
 											{
 												int ires = DIRECT_MULTIDIM_ELEM(Mresol_fine, n);
@@ -6823,7 +6824,55 @@ void MlOptimiser::storeWeightedSums(long int my_ori_particle, int ibody, int exp
 														DIRECT_A1D_ELEM(exp_wsum_scale_correction_AA[ipart], ires) += weight * sumA2;
 													}
 												}
+											}*/
+											//modify by zjw 2018.3.12, vectorized the loop
+											RFLOAT my_wdiff2[NZYXSIZE(Mresol_fine)];
+#pragma ivedp
+											for (long int n=0; n<NZYXSIZE(Mresol_fine); ++n){
+												int ires = DIRECT_MULTIDIM_ELEM(Mresol_fine, n);
+												if (ires > -1)
+												{	// Use FT of masked image for noise estimation!
+													RFLOAT diff_real = (DIRECT_MULTIDIM_ELEM(Frefctf, n)).real - (*(Fimg_shift + n)).real;
+													RFLOAT diff_imag = (DIRECT_MULTIDIM_ELEM(Frefctf, n)).imag - (*(Fimg_shift + n)).imag;
+													my_wdiff2[n] = weight * (diff_real*diff_real + diff_imag*diff_imag);
+												}
 											}
+#pragma ivedp
+											for (long int n=0; n<NZYXSIZE(Mresol_fine); ++n){
+												int ires = DIRECT_MULTIDIM_ELEM(Mresol_fine, n);
+												if (ires > -1)
+												{	
+													// group-wise sigma2_noise
+													DIRECT_MULTIDIM_ELEM(thr_wsum_sigma2_noise[group_id], ires) += my_wdiff2[n];
+													// For norm_correction
+													exp_wsum_norm_correction[ipart] += my_wdiff2[n];;
+												}
+											}
+											if (do_scale_correction){
+												long int cnt = -1;
+												long int do_scale_correction_n[NZYXSIZE(Mresol_fine)];
+												long int do_scale_correction_ires[NZYXSIZE(Mresol_fine)];
+												for (long int n=0; n<NZYXSIZE(Mresol_fine); ++n){
+													int ires = DIRECT_MULTIDIM_ELEM(Mresol_fine, n);
+													if (ires > -1 && DIRECT_A1D_ELEM(mymodel.data_vs_prior_class[exp_iclass], ires) > 3.){
+														do_scale_correction_n[++cnt] = n;
+														do_scale_correction_ires[cnt] = ires;
+													}
+												}
+#pragma ivedp
+												for (long int my_n=0; my_n <= cnt; ++my_n){
+													int n = do_scale_correction[my_n];
+													int ires = do_scale_correction_ires[my_n];
+													RFLOAT sumXA, sumA2;
+													sumXA = (DIRECT_MULTIDIM_ELEM(Frefctf, n)).real * (*(Fimg_shift + n)).real;
+													sumXA += (DIRECT_MULTIDIM_ELEM(Frefctf, n)).imag * (*(Fimg_shift + n)).imag;
+													DIRECT_A1D_ELEM(exp_wsum_scale_correction_XA[ipart], ires) += weight * sumXA;
+													sumA2 = (DIRECT_MULTIDIM_ELEM(Frefctf, n)).real * (DIRECT_MULTIDIM_ELEM(Frefctf, n)).real;
+													sumA2 += (DIRECT_MULTIDIM_ELEM(Frefctf, n)).imag * (DIRECT_MULTIDIM_ELEM(Frefctf, n)).imag;
+													DIRECT_A1D_ELEM(exp_wsum_scale_correction_AA[ipart], ires) += weight * sumA2;
+												}
+											}
+											
 #ifdef TIMING
 											// Only time one thread, as I also only time one MPI process
 											if (my_ori_particle == exp_my_first_ori_particle)
