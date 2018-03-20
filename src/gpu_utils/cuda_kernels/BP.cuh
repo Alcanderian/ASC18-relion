@@ -76,9 +76,9 @@ __global__ void cuda_kernel_backproject2D(
 
 	for (unsigned pass = 0; pass < tran_pass_num; pass++)
 	{
-		s_weights[pass]	= g_weights[img * translation_num + pass * BP_2D_BLOCK_SIZE + tid];
-		s_trans_x[pass]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
-		s_trans_y[pass]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
+		s_weights[pass * BP_2D_BLOCK_SIZE + tid]	= g_weights[img * translation_num + pass * BP_2D_BLOCK_SIZE + tid];
+		s_trans_x[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
+		s_trans_y[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
 	}
 
 	__syncthreads();
@@ -254,11 +254,11 @@ __global__ void cuda_kernel_backproject3D(
 
 	for (unsigned pass = 0; pass < tran_pass_num; pass++)
 	{
-		s_weights[pass]		= g_weights[img * translation_num + pass * block_sz + tid];
-		s_trans_x[pass]		= g_trans_x[pass * block_sz + tid];
-		s_trans_y[pass]		= g_trans_y[pass * block_sz + tid];
+		s_weights[pass * block_sz + tid]		= g_weights[img * translation_num + pass * block_sz + tid];
+		s_trans_x[pass * block_sz + tid]		= g_trans_x[pass * block_sz + tid];
+		s_trans_y[pass * block_sz + tid]		= g_trans_y[pass * block_sz + tid];
 		if(DATA3D)
-			s_trans_y[pass]	= g_trans_y[pass * block_sz + tid];
+			s_trans_z[pass * block_sz + tid]	= g_trans_z[pass * block_sz + tid];
 	}
 
 	__syncthreads();
