@@ -41,7 +41,7 @@ __global__ void cuda_kernel_wavg(
 	XFLOAT * s_wdiff2s_parts	= &buffer[0];
 	XFLOAT * s_sumXA			= &buffer[block_sz];
 	XFLOAT * s_sumA2			= &buffer[2*block_sz];
-	XFLOAT * s_eulers           = &buffer[3*block_sz];
+	XFLOAT * s_eulers          = &buffer[3*block_sz];
 
 	//opt by ljx prefetch data
 	XFLOAT * s_weights			= &buffer[3*block_sz+9];
@@ -56,17 +56,21 @@ __global__ void cuda_kernel_wavg(
 
 	int tran_pass_num(translation_num / block_sz);
 	int remain_num(translation_num % block_sz);
-
-	for (unsigned pass = 0; pass < tran_pass_num; pass++)
+	
+	if (tran_pass_num != 0)
 	{
-		s_weights[pass * block_sz + tid]		= g_weights[bid * translation_num + pass * block_sz + tid];
-		s_trans_x[pass * block_sz + tid]		= g_trans_x[pass * block_sz + tid];
-		s_trans_y[pass * block_sz + tid]		= g_trans_y[pass * block_sz + tid];
-		if(DATA3D)
-			s_trans_z[pass * block_sz + tid]	= g_trans_z[pass * block_sz + tid];
-	}
 
-	__syncthreads();
+		for (unsigned pass = 0; pass < tran_pass_num; pass++)
+		{
+			s_weights[pass * block_sz + tid]		= g_weights[bid * translation_num + pass * block_sz + tid];
+			s_trans_x[pass * block_sz + tid]		= g_trans_x[pass * block_sz + tid];
+			s_trans_y[pass * block_sz + tid]		= g_trans_y[pass * block_sz + tid];
+			if(DATA3D)
+				s_trans_z[pass * block_sz + tid]	= g_trans_z[pass * block_sz + tid];
+		}
+
+		__syncthreads();
+	}
 
 	if (tid < remain_num)
 	{

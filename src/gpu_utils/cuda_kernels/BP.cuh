@@ -74,15 +74,18 @@ __global__ void cuda_kernel_backproject2D(
 	int tran_pass_num(translation_num / BP_2D_BLOCK_SIZE);
 	int remain_num(translation_num % BP_2D_BLOCK_SIZE);
 
-	for (unsigned pass = 0; pass < tran_pass_num; pass++)
+	if (tran_pass_num != 0)
 	{
-		s_weights[pass * BP_2D_BLOCK_SIZE + tid]	= g_weights[img * translation_num + pass * BP_2D_BLOCK_SIZE + tid];
-		s_trans_x[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
-		s_trans_y[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
+		for (unsigned pass = 0; pass < tran_pass_num; pass++)
+		{
+			s_weights[pass * BP_2D_BLOCK_SIZE + tid]	= g_weights[img * translation_num + pass * BP_2D_BLOCK_SIZE + tid];
+			s_trans_x[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
+			s_trans_y[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
+		}
+
+		__syncthreads();
 	}
-
-	__syncthreads();
-
+	
 	if (tid < remain_num)
 	{
 		s_weights[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= g_weights[img * translation_num + tran_pass_num * BP_2D_BLOCK_SIZE + tid];
@@ -251,18 +254,22 @@ __global__ void cuda_kernel_backproject3D(
 
 	int tran_pass_num(translation_num / block_sz);
 	int remain_num(translation_num % block_sz);
-
-	for (unsigned pass = 0; pass < tran_pass_num; pass++)
+	
+	if (tran_pass_num != 0)
 	{
-		s_weights[pass * block_sz + tid]		= g_weights[img * translation_num + pass * block_sz + tid];
-		s_trans_x[pass * block_sz + tid]		= g_trans_x[pass * block_sz + tid];
-		s_trans_y[pass * block_sz + tid]		= g_trans_y[pass * block_sz + tid];
-		if(DATA3D)
-			s_trans_z[pass * block_sz + tid]	= g_trans_z[pass * block_sz + tid];
+
+		for (unsigned pass = 0; pass < tran_pass_num; pass++)
+		{
+			s_weights[pass * block_sz + tid]		= g_weights[img * translation_num + pass * block_sz + tid];
+			s_trans_x[pass * block_sz + tid]		= g_trans_x[pass * block_sz + tid];
+			s_trans_y[pass * block_sz + tid]		= g_trans_y[pass * block_sz + tid];
+			if(DATA3D)
+				s_trans_z[pass * block_sz + tid]	= g_trans_z[pass * block_sz + tid];
+		}
+
+		__syncthreads();
 	}
-
-	__syncthreads();
-
+	
 	if (tid < remain_num)
 	{
 		s_weights[tran_pass_num * block_sz + tid]		= g_weights[img * translation_num + tran_pass_num * block_sz + tid];
