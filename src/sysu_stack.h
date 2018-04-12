@@ -14,6 +14,11 @@ public:
 		current(-1)
 	{}
 	
+	~SysuStack()
+	{
+		delete items;
+	}
+	
 	bool push(void *item)
 	{
 		if(current < max_size)
