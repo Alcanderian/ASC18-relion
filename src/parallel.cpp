@@ -338,5 +338,5 @@ int divide_equally_which_group(long int N, int size, long int myself)
 }
 
 
-SysuTaskDistributor * SysuTaskDistributor::instant = NULL;
-ThreadManager * ThreadManager::instant = NULL;
+SysuTaskDistributor * SysuTaskDistributor::instance = NULL;
+ThreadManager * ThreadManager::instance = NULL;

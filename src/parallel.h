@@ -209,32 +209,32 @@ private:
     ThreadManager(int numberOfThreads, void * workClass = NULL);
 
 public:
-    static ThreadManager * instant;
-	static ThreadManager * newInstant(int numberOfThreads, void * workClass = NULL)
+    static ThreadManager * instance;
+	static ThreadManager * newInstance(int numberOfThreads, void * workClass = NULL)
 	{
-		if (instant == NULL)
+		if (instance == NULL)
 		{
-			instant = new ThreadManager(numberOfThreads, workClass);
+			instance = new ThreadManager(numberOfThreads, workClass);
 		}
 		else
 		{
-			delete instant;
-			instant = new ThreadManager(numberOfThreads, workClass);
+			delete instance;
+			instance = new ThreadManager(numberOfThreads, workClass);
 		}
-		return instant;
+		return instance;
 	}
 	
-	static ThreadManager * getInstant()
+	static ThreadManager * getInstance()
 	{
-		return instant;
+		return instance;
 	}
 	
-	static void freeInstant()
+	static void freeInstance()
 	{
-		if (instant != NULL)
+		if (instance != NULL)
 		{
-			delete instant;
-			instant = NULL;
+			delete instance;
+			instance = NULL;
 		}
 	}
 	
@@ -442,33 +442,33 @@ private:
 	{}
 	
 public:
-	static SysuTaskDistributor* instant;
+	static SysuTaskDistributor* instance;
 	
-	static SysuTaskDistributor* newInstant(const int &nr_threads)
+	static SysuTaskDistributor* newInstance(const int &nr_threads)
 	{
-		if (instant == NULL)
+		if (instance == NULL)
 		{
-			instant = new SysuTaskDistributor(nr_threads);
+			instance = new SysuTaskDistributor(nr_threads);
 		}
 		else
 		{
-			delete instant;
-			instant = new SysuTaskDistributor(nr_threads);
+			delete instance;
+			instance = new SysuTaskDistributor(nr_threads);
 		}
-		return instant;
+		return instance;
 	}
 	
-	static SysuTaskDistributor* getInstant()
+	static SysuTaskDistributor* getInstance()
 	{
-		return instant;
+		return instance;
 	}
 	
-	static void freeInstant()
+	static void freeInstance()
 	{
-		if (instant != NULL)
+		if (instance != NULL)
 		{
-			delete instant;
-			instant = NULL;
+			delete instance;
+			instance = NULL;
 		}
 	}
 	

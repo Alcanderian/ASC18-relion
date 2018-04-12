@@ -1492,8 +1492,8 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 
 void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 {
-	int start = SysuTaskDistributor::getInstant()->pg_symm_start[thread_id];
-	int end =  SysuTaskDistributor::getInstant()->pg_symm_end[thread_id];
+	int start = SysuTaskDistributor::getInstance()->pg_symm_start[thread_id];
+	int end =  SysuTaskDistributor::getInstance()->pg_symm_end[thread_id];
 	
 	//TODO
 }
@@ -1532,8 +1532,8 @@ void BackProjector::applyPointGroupSymmetry()
 	        std::cerr << " isym= " << isym << " R= " << R << std::endl;
 #endif
 
-			SysuTaskDistributor::getInstant()->distributePointGroupSymmetry(STARTINGZ(sum_weight), FINISHINGZ(sum_weight));
-			ThreadManager::getInstant()->run(globalThreadApplyPointGroupSymmetry);
+			SysuTaskDistributor::getInstance()->distributePointGroupSymmetry(STARTINGZ(sum_weight), FINISHINGZ(sum_weight));
+			ThreadManager::getInstance()->run(globalThreadApplyPointGroupSymmetry);
 			
 			if (threadException != NULL)
 				throw *threadException;

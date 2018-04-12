@@ -1117,7 +1117,7 @@ void MlOptimiser::initialise()
     initialiseWorkLoad();
 	
 	//Add by ljx: Distributor for sysu.
-	SysuTaskDistributor::newInstant(nr_threads);
+	SysuTaskDistributor::newInstance(nr_threads);
 
 	if (fn_sigma != "")
 	{
@@ -2123,9 +2123,9 @@ void MlOptimiser::iterateSetup()
 	global_barrier = new Barrier(nr_threads - 1);
 
     // Create threads to start working
-	global_ThreadManager = ThreadManager::newInstant(nr_threads, this);
+	global_ThreadManager = ThreadManager::newInstance(nr_threads, this);
 	
-	SysuTaskDistributor::newInstant(nr_threads);
+	SysuTaskDistributor::newInstance(nr_threads);
 
 	// Set up the thread task distributors for the particles and the orientations (will be resized later on)
 	exp_ipart_ThreadTaskDistributor = new ThreadTaskDistributor(nr_threads, 1);
@@ -2136,8 +2136,8 @@ void MlOptimiser::iterateWrapUp()
 
 	// delete barrier, threads and task distributors
     delete global_barrier;
-	ThreadManager::freeInstant();
-	SysuTaskDistributor::freeInstant();
+	ThreadManager::freeInstance();
+	SysuTaskDistributor::freeInstance();
     delete exp_ipart_ThreadTaskDistributor;
 
     // Delete volatile space on scratch
