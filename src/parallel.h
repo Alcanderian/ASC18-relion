@@ -196,6 +196,9 @@ private:
     /// if null threads should exit
     ThreadFunction workFunction;
     bool started;
+    //这个workClass的用途是将需要调用多线程进行并行计算的类放进来，ThreadManager会把它放到ThreadArgument里，我们的子线程就可以取得这个
+    //对象了。
+    //我为这个东西增加了栈，这下就不用担心覆盖问题了。
     void * workClass;
 	
 	SysuStack workClass_stack;
