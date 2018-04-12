@@ -1115,6 +1115,9 @@ void MlOptimiser::initialise()
     initialiseGeneral();
 
     initialiseWorkLoad();
+	
+	//Add by ljx: Distributor for sysu.
+	SysuTaskDistributor::newInstant(nr_threads);
 
 	if (fn_sigma != "")
 	{
@@ -2120,7 +2123,9 @@ void MlOptimiser::iterateSetup()
 	global_barrier = new Barrier(nr_threads - 1);
 
     // Create threads to start working
-	global_ThreadManager = new ThreadManager(nr_threads, this);
+	global_ThreadManager = ThreadManager::newInstant(nr_threads, this);
+	
+	SysuTaskDistributor::newInstant(nr_threads);
 
 	// Set up the thread task distributors for the particles and the orientations (will be resized later on)
 	exp_ipart_ThreadTaskDistributor = new ThreadTaskDistributor(nr_threads, 1);
@@ -2131,7 +2136,8 @@ void MlOptimiser::iterateWrapUp()
 
 	// delete barrier, threads and task distributors
     delete global_barrier;
-	delete global_ThreadManager;
+	ThreadManager::freeInstant();
+	SysuTaskDistributor::freeInstant();
     delete exp_ipart_ThreadTaskDistributor;
 
     // Delete volatile space on scratch
@@ -3436,7 +3442,9 @@ void MlOptimiser::symmetriseReconstructions()
 			{
 				// Immediately after expectation process. Do rise and twist for all asymmetrical units in Fourier space
 				// Also convert helical rise to pixels for BPref object
+				global_ThreadManager->pushWorkClass((void *)(&wsum_model.BPref[ith_recons]));
 				wsum_model.BPref[ith_recons].symmetrise(mymodel.helical_nr_asu, mymodel.helical_twist[ith_recons], mymodel.helical_rise[ith_recons] / mymodel.pixel_size);
+				global_ThreadManager->popWorkClass();
 			}
 		}
 	}

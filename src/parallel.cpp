@@ -152,7 +152,6 @@ ThreadManager::ThreadManager(int numberOfThreads, void * workClass)
     arguments = new ThreadArgument[threads];
     started = false;
     this->workClass = workClass;
-
 }
 
 void ThreadManager::startThreads()
@@ -338,3 +337,6 @@ int divide_equally_which_group(long int N, int size, long int myself)
     return -1;
 }
 
+
+SysuTaskDistributor * SysuTaskDistributor::instant = NULL;
+ThreadManager * ThreadManager::instant = NULL;

@@ -34,7 +34,26 @@
     #define RCTOC(timer,label)
 #endif
 
+void globalThreadApplyPointGroupSymmetry(ThreadArgument &thArg)
+{
+	BackProjector *BP = (BackProjector*) thArg.workClass;
 
+	try
+	{
+#ifdef CUDA
+		//if (MLO->do_gpu)
+		//	TODO: finish cuda version.
+		//else
+#endif
+			BP->doThreadApplyPointGroupSymmetry(thArg.thread_id);
+	}
+	catch (RelionError XE)
+	{
+		RelionError *gE = new RelionError(XE.msg, XE.file, XE.line);
+		gE->msg = XE.msg;
+		BP->threadException = gE;
+	}
+}
 
 void BackProjector::initialiseDataAndWeight(int current_size)
 {
@@ -1471,6 +1490,14 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 
 }
 
+void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
+{
+	int start = SysuTaskDistributor::getInstant()->pg_symm_start[thread_id];
+	int end =  SysuTaskDistributor::getInstant()->pg_symm_end[thread_id];
+	
+	//TODO
+}
+
 void BackProjector::applyPointGroupSymmetry()
 {
 
@@ -1505,8 +1532,16 @@ void BackProjector::applyPointGroupSymmetry()
 	        std::cerr << " isym= " << isym << " R= " << R << std::endl;
 #endif
 
+			SysuTaskDistributor::getInstant()->distributePointGroupSymmetry(STARTINGZ(sum_weight), FINISHINGZ(sum_weight));
+			ThreadManager::getInstant()->run(globalThreadApplyPointGroupSymmetry);
+			
+			if (threadException != NULL)
+				throw *threadException;
+			
 	        // Loop over all points in the output (i.e. rotated, or summed) array
-	        FOR_ALL_ELEMENTS_IN_ARRAY3D(sum_weight)
+			for (long int k=STARTINGZ(sum_weight); k<=FINISHINGZ(sum_weight); k++) \
+				for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++) \
+					for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
 	        {
 
 	        	x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!

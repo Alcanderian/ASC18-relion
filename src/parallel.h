@@ -48,6 +48,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "src/error.h"
+#include "src/sysu_stack.h"
 
 // This code was copied from a developmental version of Xmipp-3.0
 // which is developed at the Biocomputing Unit of the National Center for Biotechnology - CSIC
@@ -196,12 +197,61 @@ private:
     ThreadFunction workFunction;
     bool started;
     void * workClass;
+	
+	SysuStack workClass_stack;
 
     void startThreads();
+	
+	/** Constructor, number of working threads should be supplied */
+    ThreadManager(int numberOfThreads, void * workClass = NULL);
 
 public:
-    /** Constructor, number of working threads should be supplied */
-    ThreadManager(int numberOfThreads, void * workClass = NULL);
+    static ThreadManager * instant;
+	static ThreadManager * newInstant(int numberOfThreads, void * workClass = NULL)
+	{
+		if (instant == NULL)
+		{
+			instant = new ThreadManager(numberOfThreads, workClass);
+		}
+		else
+		{
+			delete instant;
+			instant = new ThreadManager(numberOfThreads, workClass);
+		}
+		return instant;
+	}
+	
+	static ThreadManager * getInstant()
+	{
+		return instant;
+	}
+	
+	static void freeInstant()
+	{
+		if (instant != NULL)
+		{
+			delete instant;
+			instant = NULL;
+		}
+	}
+	
+	bool pushWorkClass(void * workClass)
+	{
+		bool status = workClass_stack.push(this->workClass);
+		if(status)
+			this->workClass = workClass;
+		return status;
+	}
+	
+	bool popWorkClass() {
+		bool status = !workClass_stack.empty();
+		if(status)
+		{
+			workClass = workClass_stack.top();
+			workClass_stack.pop();
+		}
+		return status;
+	}
 
     /** Destructor, free memory and exit threads */
     ~ThreadManager();
@@ -379,6 +429,85 @@ protected:
     virtual bool distribute(size_t &first, size_t &last);
 };//end of class ThreadTaskDistributor
 
+class SysuTaskDistributor
+{
+private:
+	SysuTaskDistributor(const int &nr_threads):
+		nr_threads(nr_threads),
+		pg_symm_start(new int[nr_threads]),
+		pg_symm_end(new int[nr_threads])
+	{}
+	
+public:
+	static SysuTaskDistributor* instant;
+	
+	static SysuTaskDistributor* newInstant(const int &nr_threads)
+	{
+		if (instant == NULL)
+		{
+			instant = new SysuTaskDistributor(nr_threads);
+		}
+		else
+		{
+			delete instant;
+			instant = new SysuTaskDistributor(nr_threads);
+		}
+		return instant;
+	}
+	
+	static SysuTaskDistributor* getInstant()
+	{
+		return instant;
+	}
+	
+	static void freeInstant()
+	{
+		if (instant != NULL)
+		{
+			delete instant;
+			instant = NULL;
+		}
+	}
+	
+	int nr_threads;
+	
+	//data for backprojector
+	int *pg_symm_start;
+	int *pg_symm_end;
+	
+	~SysuTaskDistributor()
+	{
+		delete pg_symm_start;
+		delete pg_symm_end;
+	}
+	
+	void distributePointGroupSymmetry(const int &first, const int &end)
+	{
+		for (int i = 0; i < nr_threads; ++i)
+		{
+			int start = getBlockOffset(i, nr_threads, first, end);
+			int size = getBlockSize(i, nr_threads, first, end);
+			pg_symm_start[i] = start;
+			pg_symm_end[i] = start + size - 1;
+		}
+	}
+	
+	// domain is [first, last], not [first, last)
+	static int getBlockSize(const int &block_id, const int &total_blocks, const int &first, const int &last)
+	{
+		int n = last - first + 1;
+		return (n / total_blocks) + ((n % total_blocks > block_id) ? 1 : 0);
+	}
+
+	// domain is [first, last], not [first, last)
+	static int getBlockOffset(const int &block_id, const int &total_blocks, const int &first, const int &last)
+	{
+		int n = last - first + 1;
+		int offset = (n / total_blocks) * block_id + ((n % total_blocks > block_id) ? block_id : n % total_blocks);
+		return offset + first;
+	}
+	
+};
 
 /// @name Miscellaneous functions
 //@{
