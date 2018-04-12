@@ -49,6 +49,9 @@
 #include <stdlib.h>
 #include "src/error.h"
 #include "src/sysu_stack.h"
+#include "src/matrix2d.h"
+#include "src/multidim_array.h"
+#include "src/complex.h"
 
 // This code was copied from a developmental version of Xmipp-3.0
 // which is developed at the Biocomputing Unit of the National Center for Biotechnology - CSIC
@@ -196,9 +199,9 @@ private:
     /// if null threads should exit
     ThreadFunction workFunction;
     bool started;
-    //è¿™ä¸ªworkClassçš„ç”¨é€”æ˜¯å°†éœ€è¦è°ƒç”¨å¤šçº¿ç¨‹è¿›è¡Œå¹¶è¡Œè®¡ç®—çš„ç±»æ”¾è¿›æ¥ï¼ŒThreadManagerä¼šæŠŠå®ƒæ”¾åˆ°ThreadArgumenté‡Œï¼Œæˆ‘ä»¬çš„å­çº¿ç¨‹å°±å¯ä»¥å–å¾—è¿™ä¸ª
-    //å¯¹è±¡äº†ã€‚
-    //æˆ‘ä¸ºè¿™ä¸ªä¸œè¥¿å¢åŠ äº†æ ˆï¼Œè¿™ä¸‹å°±ä¸ç”¨æ‹…å¿ƒè¦†ç›–é—®é¢˜äº†ã€‚
+    /// Õâ¸öworkClassµÄÓÃÍ¾ÊÇ½«ĞèÒªµ÷ÓÃ¶àÏß³Ì½øĞĞ²¢ĞĞ¼ÆËãµÄÀà·Å½øÀ´£¬ThreadManager»á°ÑËü·Åµ½ThreadArgumentÀï£¬ÎÒÃÇµÄ×ÓÏß³Ì¾Í¿ÉÒÔÈ¡µÃÕâ¸ö
+    /// ¶ÔÏóÁË¡£
+    /// ÎÒÎªÕâ¸ö¶«Î÷Ôö¼ÓÁËÕ»£¬ÕâÏÂ¾Í²»ÓÃµ£ĞÄ¸²¸ÇÎÊÌâÁË¡£
     void * workClass;
 	
 	SysuStack workClass_stack;
@@ -477,6 +480,10 @@ public:
 	//data for backprojector
 	int *pg_symm_start;
 	int *pg_symm_end;
+	Matrix2D<RFLOAT> *pg_symm_R;
+	MultidimArray<RFLOAT> *pg_symm_sum_weight;
+	MultidimArray<Complex > *pg_symm_sum_data;
+	int pg_symm_rmax2;
 	
 	~SysuTaskDistributor()
 	{
@@ -484,12 +491,24 @@ public:
 		delete pg_symm_end;
 	}
 	
-	void distributePointGroupSymmetry(const int &first, const int &end)
+	void distributePointGroupSymmetry(
+		const int &first, 
+		const int &last, 
+		Matrix2D<RFLOAT> &R,
+		MultidimArray<RFLOAT> &sum_weight,
+		MultidimArray<Complex > &sum_data,
+		int rmax2
+	)
 	{
+		pg_symm_R = &R;
+		pg_symm_sum_weight = &sum_weight;
+		pg_symm_sum_data = &sum_data;
+		pg_symm_rmax2 = rmax2;
+		
 		for (int i = 0; i < nr_threads; ++i)
 		{
-			int start = getBlockOffset(i, nr_threads, first, end);
-			int size = getBlockSize(i, nr_threads, first, end);
+			int start = getBlockOffset(i, nr_threads, first, last);
+			int size = getBlockSize(i, nr_threads, first, last);
 			pg_symm_start[i] = start;
 			pg_symm_end[i] = start + size - 1;
 		}

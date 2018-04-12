@@ -1492,56 +1492,26 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 
 void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 {
+	printf("Entering %d\n", thread_id);
 	int start = SysuTaskDistributor::getInstance()->pg_symm_start[thread_id];
 	int end =  SysuTaskDistributor::getInstance()->pg_symm_end[thread_id];
+	Matrix2D<RFLOAT> &R = *(SysuTaskDistributor::getInstance()->pg_symm_R);
+	MultidimArray<RFLOAT> &sum_weight = *(SysuTaskDistributor::getInstance()->pg_symm_sum_weight);
+	MultidimArray<Complex > &sum_data = *(SysuTaskDistributor::getInstance()->pg_symm_sum_data);
+	int rmax2 = SysuTaskDistributor::getInstance()->pg_symm_rmax2;
 	
-	//TODO
-}
+	RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
+	bool is_neg_x;
+	int x0, x1, y0, y1, z0, z1;
+	Complex d000, d001, d010, d011, d100, d101, d110, d111;
+	Complex dx00, dx01, dx10, dx11, dxy0, dxy1;
+	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
+	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
 
-void BackProjector::applyPointGroupSymmetry()
-{
-
-//#define DEBUG_SYMM
-#ifdef DEBUG_SYMM
-	std::cerr << " SL.SymsNo()= " << SL.SymsNo() << std::endl;
-	std::cerr << " SL.true_symNo= " << SL.true_symNo << std::endl;
-#endif
-
-	int rmax2 = ROUND(r_max * padding_factor) * ROUND(r_max * padding_factor);
-	if (SL.SymsNo() > 0 && ref_dim == 3)
-	{
-		Matrix2D<RFLOAT> L(4, 4), R(4, 4); // A matrix from the list
-		MultidimArray<RFLOAT> sum_weight;
-		MultidimArray<Complex > sum_data;
-        RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
-        bool is_neg_x;
-        int x0, x1, y0, y1, z0, z1;
-    	Complex d000, d001, d010, d011, d100, d101, d110, d111;
-    	Complex dx00, dx01, dx10, dx11, dxy0, dxy1;
-    	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
-    	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
-
-        // First symmetry operator (not stored in SL) is the identity matrix
-		sum_weight = weight;
-		sum_data = data;
-		// Loop over all other symmetry operators
-	    for (int isym = 0; isym < SL.SymsNo(); isym++)
-	    {
-	        SL.get_matrices(isym, L, R);
-#ifdef DEBUG_SYMM
-	        std::cerr << " isym= " << isym << " R= " << R << std::endl;
-#endif
-
-			SysuTaskDistributor::getInstance()->distributePointGroupSymmetry(STARTINGZ(sum_weight), FINISHINGZ(sum_weight));
-			ThreadManager::getInstance()->run(globalThreadApplyPointGroupSymmetry);
-			
-			if (threadException != NULL)
-				throw *threadException;
-			
-	        // Loop over all points in the output (i.e. rotated, or summed) array
-			for (long int k=STARTINGZ(sum_weight); k<=FINISHINGZ(sum_weight); k++) \
-				for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++) \
-					for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
+	// Loop over all points in the output (i.e. rotated, or summed) array
+	for (long int k=start; k<=end; k++)
+		for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++)
+			for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
 	        {
 
 	        	x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
@@ -1587,18 +1557,18 @@ void BackProjector::applyPointGroupSymmetry()
 				z1 = z0 + 1;
 
 #ifdef CHECK_SIZE
-					if (x0 < 0 || y0 < 0 || z0 < 0 ||
+				if (x0 < 0 || y0 < 0 || z0 < 0 ||
 						x1 < 0 || y1 < 0 || z1 < 0 ||
 						x0 >= XSIZE(data) || y0  >= YSIZE(data) || z0 >= ZSIZE(data) ||
 						x1 >= XSIZE(data) || y1  >= YSIZE(data)  || z1 >= ZSIZE(data) 	)
-					{
-						std::cerr << " x0= " << x0 << " y0= " << y0 << " z0= " << z0 << std::endl;
-						std::cerr << " x1= " << x1 << " y1= " << y1 << " z1= " << z1 << std::endl;
-						data.printShape();
-						REPORT_ERROR("BackProjector::applyPointGroupSymmetry: checksize!!!");
-					}
+				{
+					std::cerr << " x0= " << x0 << " y0= " << y0 << " z0= " << z0 << std::endl;
+					std::cerr << " x1= " << x1 << " y1= " << y1 << " z1= " << z1 << std::endl;
+					data.printShape();
+					REPORT_ERROR("BackProjector::applyPointGroupSymmetry: checksize!!!");
+				}
 #endif
-					// First interpolate (complex) data
+				// First interpolate (complex) data
 				d000 = DIRECT_A3D_ELEM(data, z0, y0, x0);
 				d001 = DIRECT_A3D_ELEM(data, z0, y0, x1);
 				d010 = DIRECT_A3D_ELEM(data, z0, y1, x0);
@@ -1642,11 +1612,54 @@ void BackProjector::applyPointGroupSymmetry()
 
 
 	        } // end loop over all elements of sum_weight
+}
+
+void BackProjector::applyPointGroupSymmetry()
+{
+
+//#define DEBUG_SYMM
+#ifdef DEBUG_SYMM
+	std::cerr << " SL.SymsNo()= " << SL.SymsNo() << std::endl;
+	std::cerr << " SL.true_symNo= " << SL.true_symNo << std::endl;
+#endif
+
+	int rmax2 = ROUND(r_max * padding_factor) * ROUND(r_max * padding_factor);
+	if (SL.SymsNo() > 0 && ref_dim == 3)
+	{
+		Matrix2D<RFLOAT> L(4, 4), R(4, 4); // A matrix from the list
+		MultidimArray<RFLOAT> sum_weight;
+		MultidimArray<Complex > sum_data;
+
+        // First symmetry operator (not stored in SL) is the identity matrix
+		sum_weight = weight;
+		sum_data = data;
+		// Loop over all other symmetry operators
+	    for (int isym = 0; isym < SL.SymsNo(); isym++)
+	    {
+	        SL.get_matrices(isym, L, R);
+#ifdef DEBUG_SYMM
+	        std::cerr << " isym= " << isym << " R= " << R << std::endl;
+#endif
+
+			SysuTaskDistributor::getInstance()->distributePointGroupSymmetry(
+				STARTINGZ(sum_weight), 
+				FINISHINGZ(sum_weight), 
+				R,
+				sum_weight,
+				sum_data,
+				rmax2
+			);
+			ThreadManager::getInstance()->run(globalThreadApplyPointGroupSymmetry);
+			
+			if (threadException != NULL)
+				throw *threadException;
 
 	    } // end loop over symmetry operators
 
 	    data = sum_data;
 	    weight = sum_weight;
+		
+		printf("ApplyPointGroupSymmetry Finish\n");
 	    // Average
 	    // The division should only be done if we would search all (C1) directions, not if we restrict the angular search!
 	    /*
