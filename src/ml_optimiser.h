@@ -509,6 +509,7 @@ public:
 	// Number of threads to run in parallel
 	int x_pool;
 	int nr_threads;
+	int sysu_cpu_threads;
 
 	//for catching exceptions in threads
 	RelionError * threadException;
@@ -606,6 +607,7 @@ public:
 		my_first_ori_particle_id(0),
 		x_pool(1),
 		nr_threads(0),
+		sysu_cpu_threads(0),
 		do_shifts_onthefly(0),
 		exp_ipart_ThreadTaskDistributor(0),
 		do_parallel_disc_io(0),

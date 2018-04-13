@@ -327,6 +327,11 @@ void MlOptimiser::parseContinue(int argc, char **argv)
 
 	x_pool = textToInteger(parser.getOption("--pool", "Number of images to pool for each thread task", "1"));
 	nr_threads = textToInteger(parser.getOption("--j", "Number of threads to run in parallel (only useful on multi-core machines)", "1"));
+	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "-1"));
+	if (sysu_cpu_threads == -1)
+	{
+		sysu_cpu_threads = nr_threads;
+	}
 	do_parallel_disc_io = !parser.checkOption("--no_parallel_disc_io", "Do NOT let parallel (MPI) processes access the disc simultaneously (use this option with NFS)");
 	combine_weights_thru_disc = !parser.checkOption("--dont_combine_weights_via_disc", "Send the large arrays of summed weights through the MPI network, instead of writing large files to disc");
 	do_shifts_onthefly = parser.checkOption("--onthefly_shifts", "Calculate shifted images on-the-fly, do not store precalculated ones in memory");
@@ -560,6 +565,11 @@ void MlOptimiser::parseInitial(int argc, char **argv)
 	int computation_section = parser.addSection("Computation");
 	x_pool = textToInteger(parser.getOption("--pool", "Number of images to pool for each thread task", "1"));
 	nr_threads = textToInteger(parser.getOption("--j", "Number of threads to run in parallel (only useful on multi-core machines)", "1"));
+	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "-1"));
+	if (sysu_cpu_threads == -1)
+	{
+		sysu_cpu_threads = nr_threads;
+	}
 	combine_weights_thru_disc = !parser.checkOption("--dont_combine_weights_via_disc", "Send the large arrays of summed weights through the MPI network, instead of writing large files to disc");
 	do_shifts_onthefly = parser.checkOption("--onthefly_shifts", "Calculate shifted images on-the-fly, do not store precalculated ones in memory");
 	do_parallel_disc_io = !parser.checkOption("--no_parallel_disc_io", "Do NOT let parallel (MPI) processes access the disc simultaneously (use this option with NFS)");
@@ -1115,9 +1125,6 @@ void MlOptimiser::initialise()
     initialiseGeneral();
 
     initialiseWorkLoad();
-	
-	//Add by ljx: Distributor for sysu.
-	SysuTaskDistributor::newInstance(nr_threads);
 
 	if (fn_sigma != "")
 	{
@@ -2123,12 +2130,15 @@ void MlOptimiser::iterateSetup()
 	global_barrier = new Barrier(nr_threads - 1);
 
     // Create threads to start working
-	global_ThreadManager = ThreadManager::newInstance(nr_threads, this);
-	
-	SysuTaskDistributor::newInstance(nr_threads);
+	global_ThreadManager = ThreadManager::newInstance(GENERAL_PARALLEL, nr_threads, this);
+	SysuTaskDistributor::newInstance(GENERAL_PARALLEL, nr_threads);
 
 	// Set up the thread task distributors for the particles and the orientations (will be resized later on)
 	exp_ipart_ThreadTaskDistributor = new ThreadTaskDistributor(nr_threads, 1);
+	
+	//Setup Sysu Cpu
+	ThreadManager::newInstance(SYSU_CPU_PARALLEL, sysu_cpu_threads);
+	SysuTaskDistributor::newInstance(SYSU_CPU_PARALLEL, sysu_cpu_threads);
 
 }
 void MlOptimiser::iterateWrapUp()
@@ -2136,8 +2146,10 @@ void MlOptimiser::iterateWrapUp()
 
 	// delete barrier, threads and task distributors
     delete global_barrier;
-	ThreadManager::freeInstance();
-	SysuTaskDistributor::freeInstance();
+	ThreadManager::freeInstance(GENERAL_PARALLEL);
+	ThreadManager::freeInstance(SYSU_CPU_PARALLEL);
+	SysuTaskDistributor::freeInstance(GENERAL_PARALLEL);
+	SysuTaskDistributor::freeInstance(SYSU_CPU_PARALLEL);
     delete exp_ipart_ThreadTaskDistributor;
 
     // Delete volatile space on scratch

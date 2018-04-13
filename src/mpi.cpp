@@ -285,7 +285,7 @@ void MpiNode::report_MPI_ERROR(int error_code)
 
 
 
-void printMpiNodesMachineNames(MpiNode &node, int nthreads)
+void printMpiNodesMachineNames(MpiNode &node, int nthreads, int nsysu_cpu_threads)
 {
 
 
@@ -297,6 +297,8 @@ void printMpiNodesMachineNames(MpiNode &node, int nthreads)
     	{
     		std::cout << " + Number of threads per MPI process  = " << nthreads << std::endl;
     		std::cout << " + Total number of threads therefore  = " << nthreads * node.size << std::endl;
+            std::cout << " + Number of SYSU CPU threads per MPI process  = " << nsysu_cpu_threads << std::endl;
+    		std::cout << " + Total number of SYSU CPU threads therefore  = " << nsysu_cpu_threads * node.size << std::endl;
 		}
     	std::cout << " + Master  (0) runs on host            = " << node.getHostName() << std::endl;
     	std::cout.flush();

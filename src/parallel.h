@@ -57,6 +57,9 @@
 // which is developed at the Biocomputing Unit of the National Center for Biotechnology - CSIC
 // in Madrid , Spain
 
+#define GENERAL_PARALLEL 0
+#define SYSU_CPU_PARALLEL 1
+
 
 class ThreadManager;
 class ThreadArgument;
@@ -199,9 +202,6 @@ private:
     /// if null threads should exit
     ThreadFunction workFunction;
     bool started;
-    /// ���workClass����;�ǽ���Ҫ���ö��߳̽��в��м������Ž�����ThreadManager������ŵ�ThreadArgument����ǵ����߳̾Ϳ���ȡ�����
-    /// �����ˡ�
-    /// ��Ϊ�������������ջ�����¾Ͳ��õ��ĸ��������ˡ�
     void * workClass;
 	
 	SysuStack workClass_stack;
@@ -212,32 +212,32 @@ private:
     ThreadManager(int numberOfThreads, void * workClass = NULL);
 
 public:
-    static ThreadManager * instance;
-	static ThreadManager * newInstance(int numberOfThreads, void * workClass = NULL)
+    static ThreadManager * instances[2];
+	static ThreadManager * newInstance(int index, int numberOfThreads, void * workClass = NULL)
 	{
-		if (instance == NULL)
+		if (instances[index] == NULL)
 		{
-			instance = new ThreadManager(numberOfThreads, workClass);
+			instances[index] = new ThreadManager(numberOfThreads, workClass);
 		}
 		else
 		{
-			delete instance;
-			instance = new ThreadManager(numberOfThreads, workClass);
+			delete instances[index];
+			instances[index] = new ThreadManager(numberOfThreads, workClass);
 		}
-		return instance;
+		return instances[index];
 	}
 	
-	static ThreadManager * getInstance()
+	static ThreadManager * getInstance(int index)
 	{
-		return instance;
+		return instances[index];
 	}
 	
-	static void freeInstance()
+	static void freeInstance(int index)
 	{
-		if (instance != NULL)
+		if (instances[index] != NULL)
 		{
-			delete instance;
-			instance = NULL;
+			delete instances[index];
+			instances[index] = NULL;
 		}
 	}
 	
@@ -448,6 +448,22 @@ public:
 	MultidimArray<Complex > *data;
 	int rmax2;
 	
+	int coor_arr_sz;
+	
+	RFLOAT *fxs, *fys, *fzs;
+	RFLOAT *fxs1m, *fys1m, *fzs1m;
+	RFLOAT *conj_factors;
+
+	RFLOAT *arr_plus_3d_r;
+	RFLOAT *arr_plus_3d_cri;
+
+	RFLOAT *all_pone;
+	RFLOAT *all_none;
+
+	RFLOAT *d000rs, *d001rs, *d010rs, *d011rs, *d100rs, *d101rs, *d110rs, *d111rs;
+	RFLOAT *d000is, *d001is, *d010is, *d011is, *d100is, *d101is, *d110is, *d111is;
+	RFLOAT *dd000s, *dd001s, *dd010s, *dd011s, *dd100s, *dd101s, *dd110s, *dd111s;
+	
 	PointGroupSymmetryArgument(int nr_threads):
 		start(new int[nr_threads]),
 		end(new int[nr_threads]),
@@ -473,33 +489,33 @@ private:
 	{}
 	
 public:
-	static SysuTaskDistributor* instance;
+	static SysuTaskDistributor *instances[2];
 	
-	static SysuTaskDistributor* newInstance(const int &nr_threads)
+	static SysuTaskDistributor* newInstance(const int &index, const int &nr_threads)
 	{
-		if (instance == NULL)
+		if (instances[index] == NULL)
 		{
-			instance = new SysuTaskDistributor(nr_threads);
+			instances[index] = new SysuTaskDistributor(nr_threads);
 		}
 		else
 		{
-			delete instance;
-			instance = new SysuTaskDistributor(nr_threads);
+			delete instances[index];
+			instances[index] = new SysuTaskDistributor(nr_threads);
 		}
-		return instance;
+		return instances[index];
 	}
 	
-	static SysuTaskDistributor* getInstance()
+	static SysuTaskDistributor* getInstance(const int &index)
 	{
-		return instance;
+		return instances[index];
 	}
 	
-	static void freeInstance()
+	static void freeInstance(const int &index)
 	{
-		if (instance != NULL)
+		if (instances[index] != NULL)
 		{
-			delete instance;
-			instance = NULL;
+			delete instances[index];
+			instances[index] = NULL;
 		}
 	}
 	
@@ -530,31 +546,133 @@ public:
 	
 	PointGroupSymmetryArgument * pgsArg;
 	
-	void preparePiontGroupSymmetry()
+	void preparePiontGroupSymmetry(
+		MultidimArray<RFLOAT> &weight,
+		MultidimArray<Complex > &data,
+		int rmax2
+	)
 	{
 		if (pgsArg != NULL)
-			delete pgsArg;
+			recyclePointGroupSymmetry();
 		pgsArg = new PointGroupSymmetryArgument(nr_threads);
+	
+		pgsArg->weight = &weight;
+		pgsArg->data = &data;
+		pgsArg->sum_weight = weight;
+		pgsArg->sum_data = data;
+		pgsArg->rmax2 = rmax2;
 	}
 	
 	void distributePointGroupSymmetry()
 	{
 		int first = STARTINGZ(pgsArg->sum_weight);
 		int last = FINISHINGZ(pgsArg->sum_weight);
+		
 		for (int i = 0; i < nr_threads; ++i)
 		{
 			int start = getBlockOffset(i, nr_threads, first, last);
 			int size = getBlockSize(i, nr_threads, first, last);
 			pgsArg->start[i] = start;
 			pgsArg->end[i] = start + size - 1;
-			//printf("Distribute Thread % d with [%d, %d]\n", i, pgsArg->start[i], pgsArg->end[i]);
+		}
+		
+		int coor_arr_sz         = FINISHINGX(pgsArg->sum_weight) - STARTINGX(pgsArg->sum_weight) + 3;
+		
+		pgsArg->coor_arr_sz     = coor_arr_sz;
+		
+		pgsArg->fxs             = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fys             = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fzs             = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fxs1m           = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fys1m           = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fzs1m           = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->conj_factors    = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->all_pone        = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->all_none        = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->arr_plus_3d_r   = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->arr_plus_3d_cri = new RFLOAT[coor_arr_sz * nr_threads * 2];
+
+		pgsArg->d000rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d001rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d010rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d011rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d100rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d101rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d110rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d111rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d000is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d001is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d010is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d011is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d100is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d101is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d110is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d111is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd000s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd001s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd010s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd011s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd100s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd101s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd110s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd111s          = new RFLOAT[coor_arr_sz * nr_threads];
+
+		for(int j = 0; j < coor_arr_sz; j++)
+		{
+			pgsArg->all_pone[j] = 1.0;
+			pgsArg->all_none[j] = -1.0;
 		}
 	}
 	
 	void recyclePointGroupSymmetry()
 	{
 		if (pgsArg != NULL)
+		{
+			delete pgsArg->fxs;
+			delete pgsArg->fys;
+			delete pgsArg->fzs;
+			
+			delete pgsArg->fxs1m;
+			delete pgsArg->fys1m;
+			delete pgsArg->fzs1m;
+			
+			delete pgsArg->conj_factors;
+
+			delete pgsArg->arr_plus_3d_r;
+			delete pgsArg->arr_plus_3d_cri;
+
+			delete pgsArg->all_pone;
+			delete pgsArg->all_none;
+			
+			delete pgsArg->d000rs;
+			delete pgsArg->d001rs;
+			delete pgsArg->d010rs;
+			delete pgsArg->d011rs;
+			delete pgsArg->d100rs;
+			delete pgsArg->d101rs;
+			delete pgsArg->d110rs;
+			delete pgsArg->d111rs;
+			
+			delete pgsArg->d000is;
+			delete pgsArg->d001is;
+			delete pgsArg->d010is;
+			delete pgsArg->d011is;
+			delete pgsArg->d100is;
+			delete pgsArg->d101is;
+			delete pgsArg->d110is;
+			delete pgsArg->d111is;
+			
+			delete pgsArg->dd000s;
+			delete pgsArg->dd001s;
+			delete pgsArg->dd010s;
+			delete pgsArg->dd011s;
+			delete pgsArg->dd100s;
+			delete pgsArg->dd101s;
+			delete pgsArg->dd110s;
+			delete pgsArg->dd111s;
+			
 			delete pgsArg;
+		}
 		pgsArg = NULL;
 	}
 	
