@@ -1490,6 +1490,14 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
     weight = sum_weight;
 
 }
+static inline void RFP_ARR_PLUS(RFLOAT* arr_dst, RFLOAT* arr_src, int arr_len)
+{
+    #pragma simd
+    for(int i = 0; i < arr_len; i++)
+    {
+        arr_dst[i] += arr_src[i];
+    }
+}
 
 static inline void RFP_ARR_PLUS(RFLOAT* arr_dst, RFLOAT* arr_src, int arr_len)
 {
@@ -1520,12 +1528,12 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
 	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
 
-	//´´½¨´æ´¢ËùÓÐxyz×ø±êµÄÊý×é
-	//¿¼ÂÇ¶àÏß³ÌµÄÇé¿ö£¬Õâ¸öÊý×é¿ÉÄÜÐèÒªÓÐ¶à¸ö¸´±¾
+	//ï¿½ï¿½ï¿½ï¿½ï¿½æ´¢ï¿½ï¿½ï¿½ï¿½xyzï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	//ï¿½ï¿½ï¿½Ç¶ï¿½ï¿½ß³Ìµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½Ð¶ï¿½ï¿½ï¿½
 	//RFLOAT: xp, yp, zp, fx, fy, fz
 	//Complex: conj_factors
 	//int: x0, x1, y0, y1, z0, z1
-	//µ«ÊÇ£¬ÎÒÃÇÏÖÔÚµÄÈÎÎñ²¢²»ÊÇÍêÈ«½«·Ã´æºÍÇ°ÃæµÄ×ø±ê¼ÆËã·Ö¿ªÀ´£¬¶øÊÇ¾¡Á¿±ÜÃâÓë·Ã´æÏà¹ØµÄÌõ¼þ¼ÆËã
+	//ï¿½ï¿½ï¿½Ç£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½ï¿½ï¿½ñ²¢²ï¿½ï¿½ï¿½ï¿½ï¿½È«ï¿½ï¿½ï¿½Ã´ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã´ï¿½ï¿½ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	//RFLOAT* xps, *yps, *zps, *fxs, *fys, *fzs;
 	RFLOAT *fxs, *fys, *fzs;
 	RFLOAT *fxs1m, *fys1m, *fzs1m;
@@ -1631,7 +1639,7 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 			if(dist2 < 0)
 				continue;
 
-			//¿¼ÂÇµ½²»¿ÉÄÜÊÇ¡°Á½¶Î¡±Âú×ãÇé¿ö£¬ÎÒÖ»ÐèÒª¼ÇÂ¼ÆðµãºÍÖÕµã¾ÍºÃÁË
+			//ï¿½ï¿½ï¿½Çµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¡ï¿½ï¿½ï¿½Î¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½Òªï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½Õµï¿½Íºï¿½ï¿½ï¿½
 
 			int arr_it = -1;
 			int j_st = STARTINGX(sum_weight), j_ed = FINISHINGX(sum_weight);
@@ -1647,8 +1655,8 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 					continue;
 
 				if(j_act_st == j_st - 1)
-					j_act_st = j;//Ö»»á·¢ÉúÒ»´Î
-				j_act_ed = j;//±£Áôµ½×îºóÒ»´Î
+					j_act_st = j;//Ö»ï¿½á·¢ï¿½ï¿½Ò»ï¿½ï¿½
+				j_act_ed = j;//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½
 
 				arr_it = j - j_st;
 				if (x * R(0, 0) + yr0 + zr0 < 0)
@@ -1856,7 +1864,6 @@ void BackProjector::applyPointGroupSymmetry()
 	    }
 	    */
 	}
-
 }
 
 void BackProjector::convoluteBlobRealSpace(FourierTransformer &transformer, bool do_mask)

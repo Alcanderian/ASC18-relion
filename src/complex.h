@@ -26,13 +26,13 @@
 class Complex
 {
 
-	public:
+    public:
 
-	RFLOAT real;
-	RFLOAT imag;
+    RFLOAT real;
+    RFLOAT imag;
 
     // Constructor
-	Complex(RFLOAT _r = 0.0, RFLOAT _i = 0.0);
+    Complex(RFLOAT _r = 0.0, RFLOAT _i = 0.0);
 
     Complex operator+(Complex &op);
     void operator+=(Complex &op);
@@ -40,11 +40,11 @@ class Complex
     Complex operator-(Complex &op);
     void operator-=(Complex &op);
 
-    Complex operator*(Complex &op);
+    // Complex operator*(Complex &op);
 
     void operator*=(RFLOAT op);
 
-    Complex operator*(RFLOAT op);
+    // Complex operator*(RFLOAT op);
 
     Complex operator/(Complex &op);
 
@@ -67,19 +67,76 @@ class Complex
 
 };
 
-Complex conj(const Complex& op);
-RFLOAT abs(const Complex& op);
-RFLOAT norm(const Complex& op);
-RFLOAT arg(const Complex& op);
 
-Complex operator+(const Complex& lhs, const Complex& rhs);
-Complex operator-(const Complex& lhs, const Complex& rhs);
-Complex operator*(const Complex& lhs, const Complex& rhs);
-Complex operator*(const Complex& lhs, const RFLOAT& val);
-Complex operator*(const RFLOAT& val, const Complex& rhs);
-Complex operator/(const Complex& lhs, const RFLOAT& val);
+static inline Complex operator+(const Complex& lhs, const Complex& rhs)
+{
+    return Complex(lhs.real + rhs.real, lhs.imag + rhs.imag);
+}
 
-void operator+=(Complex& lhs, const Complex& rhs);
-void operator-=(Complex& lhs, const Complex& rhs);
+static inline Complex operator-(const Complex& lhs, const Complex& rhs)
+{
+    return Complex(lhs.real - rhs.real, lhs.imag - rhs.imag);
+
+}
+
+static inline Complex operator*(const Complex& lhs, const Complex& rhs)
+{
+    return Complex((lhs.real * rhs.real) - (lhs.imag * rhs.imag), (lhs.real * rhs.imag) + (lhs.imag * rhs.real));
+}
+
+static inline Complex operator*(const Complex& lhs, const RFLOAT& val)
+{
+    return Complex(lhs.real * val , lhs.imag * val);
+}
+
+static inline Complex operator*(const RFLOAT& val, const Complex& rhs)
+{
+    return Complex(rhs.real * val , rhs.imag * val);
+}
+
+static inline void operator+=(Complex& lhs, const Complex& rhs)
+{
+    lhs.real += rhs.real;
+    lhs.imag += rhs.imag;
+}
+static inline void operator-=(Complex& lhs, const Complex& rhs)
+{
+    lhs.real -= rhs.real;
+    lhs.imag -= rhs.imag;
+}
+
+static inline Complex conj(const Complex& op)
+{
+    return Complex(op.real, -op.imag);
+}
+
+static inline RFLOAT abs(const Complex& op)
+{
+    return sqrt(op.real*op.real + op.imag*op.imag);
+}
+
+static inline RFLOAT arg(const Complex& op)
+{
+    return atan2(op.imag, op.real);
+}
+
+static inline RFLOAT norm(const Complex& op)
+{
+    return op.real*op.real + op.imag*op.imag;
+}
+//static inline Complex conj(const Complex& op);
+//static inline RFLOAT abs(const Complex& op);
+//static inline RFLOAT norm(const Complex& op);
+//static inline RFLOAT arg(const Complex& op);
+
+//static inline Complex operator+(const Complex& lhs, const Complex& rhs);
+//static inline Complex operator-(const Complex& lhs, const Complex& rhs);
+//static inline Complex operator*(const Complex& lhs, const Complex& rhs);
+//static inline Complex operator*(const Complex& lhs, const RFLOAT& val);
+//static inline Complex operator*(const RFLOAT& val, const Complex& rhs);
+//static inline Complex operator/(const Complex& lhs, const RFLOAT& val);
+
+//static inline void operator+=(Complex& lhs, const Complex& rhs);
+//static inline void operator-=(Complex& lhs, const Complex& rhs);
 
 #endif
