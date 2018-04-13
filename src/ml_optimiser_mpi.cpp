@@ -1894,7 +1894,7 @@ void MlOptimiserMpi::maximization()
 
 	if (verb > 0)
 	{
-		std::cout << " Maximization ..."<< std::endl;
+		std::cout << "\n Maximization ..."<< std::endl;
 		init_progress_bar(mymodel.nr_classes);
 	}
 

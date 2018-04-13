@@ -199,9 +199,9 @@ private:
     /// if null threads should exit
     ThreadFunction workFunction;
     bool started;
-    /// 这个workClass的用途是将需要调用多线程进行并行计算的类放进来，ThreadManager会把它放到ThreadArgument里，我们的子线程就可以取得这个
-    /// 对象了。
-    /// 我为这个东西增加了栈，这下就不用担心覆盖问题了。
+    /// 锟斤拷锟絯orkClass锟斤拷锟斤拷途锟角斤拷锟斤拷要锟斤拷锟矫讹拷锟竭程斤拷锟叫诧拷锟叫硷拷锟斤拷锟斤拷锟脚斤拷锟斤拷锟斤拷ThreadManager锟斤拷锟斤拷锟斤拷诺锟絋hreadArgument锟斤，锟斤拷锟角碉拷锟斤拷锟竭程就匡拷锟斤拷取锟斤拷锟斤拷锟
+    /// 锟斤拷锟斤拷锟剿★拷
+    /// 锟斤拷为锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟秸伙拷锟斤拷锟斤拷戮筒锟斤拷玫锟斤拷母锟斤拷锟斤拷锟斤拷锟斤拷恕锟
     void * workClass;
 	
 	SysuStack workClass_stack;
@@ -435,13 +435,41 @@ protected:
     virtual bool distribute(size_t &first, size_t &last);
 };//end of class ThreadTaskDistributor
 
+//===================== FOR SYSU ===============================
+
+class PointGroupSymmetryArgument
+{
+public:
+	int *start, *end;
+	Matrix2D<RFLOAT> L, R;
+	MultidimArray<RFLOAT> sum_weight;
+	MultidimArray<Complex > sum_data;
+	MultidimArray<RFLOAT> *weight;
+	MultidimArray<Complex > *data;
+	int rmax2;
+	
+	PointGroupSymmetryArgument(int nr_threads):
+		start(new int[nr_threads]),
+		end(new int[nr_threads]),
+		L(4, 4), R(4, 4)
+	{
+		//printf("PointGroupSymmetryArgument construct with nr_threads=%d\n", nr_threads);
+	}
+	
+	~PointGroupSymmetryArgument()
+	{
+		//printf("PointGroupSymmetryArgument destroy\n");
+		delete start;
+		delete end;
+	}
+};
+
 class SysuTaskDistributor
 {
 private:
 	SysuTaskDistributor(const int &nr_threads):
 		nr_threads(nr_threads),
-		pg_symm_start(new int[nr_threads]),
-		pg_symm_end(new int[nr_threads])
+		pgsArg(NULL)
 	{}
 	
 public:
@@ -475,45 +503,6 @@ public:
 		}
 	}
 	
-	int nr_threads;
-	
-	//data for backprojector
-	int *pg_symm_start;
-	int *pg_symm_end;
-	Matrix2D<RFLOAT> *pg_symm_R;
-	MultidimArray<RFLOAT> *pg_symm_sum_weight;
-	MultidimArray<Complex > *pg_symm_sum_data;
-	int pg_symm_rmax2;
-	
-	~SysuTaskDistributor()
-	{
-		delete pg_symm_start;
-		delete pg_symm_end;
-	}
-	
-	void distributePointGroupSymmetry(
-		const int &first, 
-		const int &last, 
-		Matrix2D<RFLOAT> &R,
-		MultidimArray<RFLOAT> &sum_weight,
-		MultidimArray<Complex > &sum_data,
-		int rmax2
-	)
-	{
-		pg_symm_R = &R;
-		pg_symm_sum_weight = &sum_weight;
-		pg_symm_sum_data = &sum_data;
-		pg_symm_rmax2 = rmax2;
-		
-		for (int i = 0; i < nr_threads; ++i)
-		{
-			int start = getBlockOffset(i, nr_threads, first, last);
-			int size = getBlockSize(i, nr_threads, first, last);
-			pg_symm_start[i] = start;
-			pg_symm_end[i] = start + size - 1;
-		}
-	}
-	
 	// domain is [first, last], not [first, last)
 	static int getBlockSize(const int &block_id, const int &total_blocks, const int &first, const int &last)
 	{
@@ -527,6 +516,46 @@ public:
 		int n = last - first + 1;
 		int offset = (n / total_blocks) * block_id + ((n % total_blocks > block_id) ? block_id : n % total_blocks);
 		return offset + first;
+	}
+	
+	int nr_threads;
+	
+	~SysuTaskDistributor()
+	{
+		if (pgsArg != NULL)
+			delete pgsArg;
+	}
+	
+	//PointGroupSymmetry section ===================================
+	
+	PointGroupSymmetryArgument * pgsArg;
+	
+	void preparePiontGroupSymmetry()
+	{
+		if (pgsArg != NULL)
+			delete pgsArg;
+		pgsArg = new PointGroupSymmetryArgument(nr_threads);
+	}
+	
+	void distributePointGroupSymmetry()
+	{
+		int first = STARTINGZ(pgsArg->sum_weight);
+		int last = FINISHINGZ(pgsArg->sum_weight);
+		for (int i = 0; i < nr_threads; ++i)
+		{
+			int start = getBlockOffset(i, nr_threads, first, last);
+			int size = getBlockSize(i, nr_threads, first, last);
+			pgsArg->start[i] = start;
+			pgsArg->end[i] = start + size - 1;
+			//printf("Distribute Thread % d with [%d, %d]\n", i, pgsArg->start[i], pgsArg->end[i]);
+		}
+	}
+	
+	void recyclePointGroupSymmetry()
+	{
+		if (pgsArg != NULL)
+			delete pgsArg;
+		pgsArg = NULL;
 	}
 	
 };

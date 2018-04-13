@@ -25,6 +25,7 @@
  */
 
 #include "src/backprojector.h"
+#include <unistd.h>
 
 #ifdef TIMING
 	#define RCTIC(timer,label) (timer.tic(label))
@@ -37,7 +38,7 @@
 void globalThreadApplyPointGroupSymmetry(ThreadArgument &thArg)
 {
 	BackProjector *BP = (BackProjector*) thArg.workClass;
-
+	//printf("Thread %d runing globalThreadApplyPointGroupSymmetry\n", thArg.thread_id);
 	try
 	{
 #ifdef CUDA
@@ -1492,13 +1493,23 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
 
 void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 {
-	printf("Entering %d\n", thread_id);
-	int start = SysuTaskDistributor::getInstance()->pg_symm_start[thread_id];
-	int end =  SysuTaskDistributor::getInstance()->pg_symm_end[thread_id];
-	Matrix2D<RFLOAT> &R = *(SysuTaskDistributor::getInstance()->pg_symm_R);
-	MultidimArray<RFLOAT> &sum_weight = *(SysuTaskDistributor::getInstance()->pg_symm_sum_weight);
-	MultidimArray<Complex > &sum_data = *(SysuTaskDistributor::getInstance()->pg_symm_sum_data);
-	int rmax2 = SysuTaskDistributor::getInstance()->pg_symm_rmax2;
+	//printf("Entering Thread %d\n", thread_id);
+	//usleep(10000 + thread_id * 1000);
+	SysuTaskDistributor * sysu_distributor = SysuTaskDistributor::getInstance();
+	
+	//read Arguments===========================================================
+	//read-only part
+	int start = sysu_distributor->pgsArg->start[thread_id];
+	int end =  sysu_distributor->pgsArg->end[thread_id];
+	int rmax2 = sysu_distributor->pgsArg->rmax2;
+	Matrix2D<RFLOAT> &R = sysu_distributor->pgsArg->R;
+	MultidimArray<RFLOAT> &sum_weight = sysu_distributor->pgsArg->sum_weight;
+	MultidimArray<Complex > &sum_data = sysu_distributor->pgsArg->sum_data;
+	//write part
+	MultidimArray<RFLOAT> &weight = *(sysu_distributor->pgsArg->weight);
+	MultidimArray<Complex > &data = *(sysu_distributor->pgsArg->data);
+	//==========================================================================
+	
 	
 	RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
 	bool is_neg_x;
@@ -1508,23 +1519,38 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
 	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
 
+	//printf("Thread %d work with [%d, %d]\n", thread_id, start, end);
+	//usleep(10000 + thread_id * 1000);
+	
 	// Loop over all points in the output (i.e. rotated, or summed) array
 	for (long int k=start; k<=end; k++)
+	{
+		//printf("Thread %d in k=%d", thread_id, k);
+		//usleep(10000 + thread_id * 1000);
 		for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++)
+		{
+			//printf("Thread %d in i=%d, k=%d", thread_id, i, k);
+			//usleep(10000 + thread_id * 1000);
 			for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
 	        {
-
+				//printf("Thread %d in j=%d, i=%d, k=%d", thread_id, j, i, k);
+				//usleep(10000 + thread_id * 1000);
 	        	x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
 	        	y = (RFLOAT)i;
 	        	z = (RFLOAT)k;
+				//printf("Thread %d in part PreA", thread_id);
+				//usleep(10000 + thread_id * 1000);
 	        	r2 = x*x + y*y + z*z;
 				//modify by zjw 2018.3.10 break unuse loop
 	        	if (r2 > rmax2) break;
+				//printf("Thread %d in part A", thread_id);
+				//usleep(10000 + thread_id * 1000);
 	        	// coords_output(x,y) = A * coords_input (xp,yp)
 				xp = x * R(0, 0) + y * R(0, 1) + z * R(0, 2);
 				yp = x * R(1, 0) + y * R(1, 1) + z * R(1, 2);
 				zp = x * R(2, 0) + y * R(2, 1) + z * R(2, 2);
-
+				//printf("Thread %d in part B", thread_id);
+				//usleep(10000 + thread_id * 1000);
 				// Only asymmetric half is stored
 				if (xp < 0)
 				{
@@ -1555,7 +1581,8 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 				fz = zp - z0;
 				z0 -= STARTINGZ(data);
 				z1 = z0 + 1;
-
+				//printf("Thread %d in part C", thread_id);
+				//usleep(10000 + thread_id * 1000);
 #ifdef CHECK_SIZE
 				if (x0 < 0 || y0 < 0 || z0 < 0 ||
 						x1 < 0 || y1 < 0 || z1 < 0 ||
@@ -1584,13 +1611,15 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 				dx11 = LIN_INTERP(fx, d110, d111);
 				dxy0 = LIN_INTERP(fy, dx00, dx10);
 				dxy1 = LIN_INTERP(fy, dx01, dx11);
-
+				//printf("Thread %d in part D", thread_id);
+				//usleep(10000 + thread_id * 1000);
 				// Take complex conjugated for half with negative x
 				if (is_neg_x)
 					A3D_ELEM(sum_data, k, i, j) += conj(LIN_INTERP(fz, dxy0, dxy1));
 				else
 					A3D_ELEM(sum_data, k, i, j) += LIN_INTERP(fz, dxy0, dxy1);
-
+				//printf("Thread %d in part E", thread_id);
+				//usleep(10000 + thread_id * 1000);
 				// Then interpolate (real) weight
 				dd000 = DIRECT_A3D_ELEM(weight, z0, y0, x0);
 				dd001 = DIRECT_A3D_ELEM(weight, z0, y0, x1);
@@ -1607,11 +1636,15 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 				ddx11 = LIN_INTERP(fx, dd110, dd111);
 				ddxy0 = LIN_INTERP(fy, ddx00, ddx10);
 				ddxy1 = LIN_INTERP(fy, ddx01, ddx11);
-
+				//printf("Thread %d in part F", thread_id);
+				//usleep(10000 + thread_id * 1000);
 				A3D_ELEM(sum_weight, k, i, j) +=  LIN_INTERP(fz, ddxy0, ddxy1);
-
+				//printf("Thread %d in part G", thread_id);
+				//usleep(10000 + thread_id * 1000);
 
 	        } // end loop over all elements of sum_weight
+		}
+	}
 }
 
 void BackProjector::applyPointGroupSymmetry()
@@ -1622,44 +1655,46 @@ void BackProjector::applyPointGroupSymmetry()
 	std::cerr << " SL.SymsNo()= " << SL.SymsNo() << std::endl;
 	std::cerr << " SL.true_symNo= " << SL.true_symNo << std::endl;
 #endif
-
-	int rmax2 = ROUND(r_max * padding_factor) * ROUND(r_max * padding_factor);
+	
 	if (SL.SymsNo() > 0 && ref_dim == 3)
 	{
-		Matrix2D<RFLOAT> L(4, 4), R(4, 4); // A matrix from the list
-		MultidimArray<RFLOAT> sum_weight;
-		MultidimArray<Complex > sum_data;
-
+		SysuTaskDistributor *sysu_distributor = SysuTaskDistributor::getInstance();
+		ThreadManager *task_manager = ThreadManager::getInstance();
+		
+		sysu_distributor->preparePiontGroupSymmetry();
+		//push myself into ThreadManager's workClass stack
+		task_manager->pushWorkClass(this);
+		
         // First symmetry operator (not stored in SL) is the identity matrix
-		sum_weight = weight;
-		sum_data = data;
+		sysu_distributor->pgsArg->weight = &weight;
+		sysu_distributor->pgsArg->data = &data;
+		sysu_distributor->pgsArg->sum_weight = weight;
+		sysu_distributor->pgsArg->sum_data = data;
+		sysu_distributor->pgsArg->rmax2 = ROUND(r_max * padding_factor) * ROUND(r_max * padding_factor);
+		sysu_distributor->distributePointGroupSymmetry();
+		
 		// Loop over all other symmetry operators
 	    for (int isym = 0; isym < SL.SymsNo(); isym++)
 	    {
-	        SL.get_matrices(isym, L, R);
+	        SL.get_matrices(isym, sysu_distributor->pgsArg->L, sysu_distributor->pgsArg->R);
 #ifdef DEBUG_SYMM
-	        std::cerr << " isym= " << isym << " R= " << R << std::endl;
+	        std::cerr << " isym= " << isym << " R= " << sysu_distributor->pgsArg->R << std::endl;
 #endif
-
-			SysuTaskDistributor::getInstance()->distributePointGroupSymmetry(
-				STARTINGZ(sum_weight), 
-				FINISHINGZ(sum_weight), 
-				R,
-				sum_weight,
-				sum_data,
-				rmax2
-			);
-			ThreadManager::getInstance()->run(globalThreadApplyPointGroupSymmetry);
+			task_manager->run(globalThreadApplyPointGroupSymmetry);
 			
 			if (threadException != NULL)
 				throw *threadException;
 
 	    } // end loop over symmetry operators
-
-	    data = sum_data;
-	    weight = sum_weight;
 		
-		printf("ApplyPointGroupSymmetry Finish\n");
+	    data = sysu_distributor->pgsArg->sum_data;
+	    weight = sysu_distributor->pgsArg->sum_weight;
+		
+		//pop myself from workClass stack
+		task_manager->popWorkClass();
+		sysu_distributor->recyclePointGroupSymmetry();
+		
+		//printf("ApplyPointGroupSymmetry Finish\n");
 	    // Average
 	    // The division should only be done if we would search all (C1) directions, not if we restrict the angular search!
 	    /*
