@@ -1490,14 +1490,6 @@ void BackProjector::applyHelicalSymmetry(int nr_helical_asu, RFLOAT helical_twis
     weight = sum_weight;
 
 }
-static inline void RFP_ARR_PLUS(RFLOAT* arr_dst, RFLOAT* arr_src, int arr_len)
-{
-    #pragma simd
-    for(int i = 0; i < arr_len; i++)
-    {
-        arr_dst[i] += arr_src[i];
-    }
-}
 
 static inline void RFP_ARR_PLUS(RFLOAT* arr_dst, RFLOAT* arr_src, int arr_len)
 {
@@ -1514,11 +1506,7 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 	
 	//===============================================================================
 	RFLOAT x, y, z, xp, yp, zp, r2, r2yz;
-	//RFLOAT x, y, z, fx, fy, fz, r2, r2yz;
-	//bool is_neg_x;
 	int x0, y0, z0;
-	// Complex d000, d001, d010, d011, d100, d101, d110, d111;
-	// Complex dx00, dx01, dx10, dx11, dxy0, dxy1;
 
 	RFLOAT d000r, d001r, d010r, d011r, d100r, d101r, d110r, d111r;
 	RFLOAT dx00r, dx01r, dx10r, dx11r, dxy0r, dxy1r;
@@ -1528,22 +1516,12 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
 	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
 
-	//�����洢����xyz��������
-	//���Ƕ��̵߳����������������Ҫ�ж���
-	//RFLOAT: xp, yp, zp, fx, fy, fz
-	//Complex: conj_factors
-	//int: x0, x1, y0, y1, z0, z1
-	//���ǣ��������ڵ����񲢲�����ȫ���ô��ǰ���������ֿ�������Ǿ��������ô���ص��������
-	//RFLOAT* xps, *yps, *zps, *fxs, *fys, *fzs;
 	RFLOAT *fxs, *fys, *fzs;
 	RFLOAT *fxs1m, *fys1m, *fzs1m;
-	// int* x0s, *y0s, *z0s;
 	RFLOAT *conj_factors;
 
 	RFLOAT *arr_plus_3d_r;
 	RFLOAT *arr_plus_3d_cri;
-	// Complex* arr_plus_3d_c;
-	// RFLOAT* xps_less_0_factors;
 
 	RFLOAT *all_pone;
 	RFLOAT *all_none;
@@ -1639,8 +1617,6 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 			if(dist2 < 0)
 				continue;
 
-			//���ǵ��������ǡ���Ρ����������ֻ��Ҫ��¼�����յ�ͺ���
-
 			int arr_it = -1;
 			int j_st = STARTINGX(sum_weight), j_ed = FINISHINGX(sum_weight);
 			int j_act_st = j_st - 1;
@@ -1655,8 +1631,8 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 					continue;
 
 				if(j_act_st == j_st - 1)
-					j_act_st = j;//ֻ�ᷢ��һ��
-				j_act_ed = j;//�������һ��
+					j_act_st = j;
+				j_act_ed = j;
 
 				arr_it = j - j_st;
 				if (x * R(0, 0) + yr0 + zr0 < 0)
