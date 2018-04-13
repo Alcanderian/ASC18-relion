@@ -4,4 +4,3 @@ build/
 build-g/
 *.udb
 .DS_Store
-*.md

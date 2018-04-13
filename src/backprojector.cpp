@@ -25,6 +25,7 @@
  */
 
 #include "src/backprojector.h"
+#include <unistd.h>
 
 #ifdef TIMING
 	#define RCTIC(timer,label) (timer.tic(label))
@@ -34,7 +35,26 @@
     #define RCTOC(timer,label)
 #endif
 
-
+void globalThreadApplyPointGroupSymmetry(ThreadArgument &thArg)
+{
+	BackProjector *BP = (BackProjector*) thArg.workClass;
+	//printf("Thread %d runing globalThreadApplyPointGroupSymmetry\n", thArg.thread_id);
+	try
+	{
+#ifdef CUDA
+		//if (MLO->do_gpu)
+		//	TODO: finish cuda version.
+		//else
+#endif
+		BP->doThreadApplyPointGroupSymmetry(thArg.thread_id);
+	}
+	catch (RelionError XE)
+	{
+		RelionError *gE = new RelionError(XE.msg, XE.file, XE.line);
+		gE->msg = XE.msg;
+		BP->threadException = gE;
+	}
+}
 
 void BackProjector::initialiseDataAndWeight(int current_size)
 {
@@ -1479,376 +1499,371 @@ static inline void RFP_ARR_PLUS(RFLOAT* arr_dst, RFLOAT* arr_src, int arr_len)
     }
 }
 
+static inline void RFP_ARR_PLUS(RFLOAT* arr_dst, RFLOAT* arr_src, int arr_len)
+{
+#pragma simd
+    for(int i = 0; i < arr_len; i++)
+    {
+        arr_dst[i] += arr_src[i];
+    }
+}
+
+void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
+{
+	SysuTaskDistributor * sysu_distributor = SysuTaskDistributor::getInstance(SYSU_CPU_PARALLEL);
+	
+	//===============================================================================
+	RFLOAT x, y, z, xp, yp, zp, r2, r2yz;
+	//RFLOAT x, y, z, fx, fy, fz, r2, r2yz;
+	//bool is_neg_x;
+	int x0, y0, z0;
+	// Complex d000, d001, d010, d011, d100, d101, d110, d111;
+	// Complex dx00, dx01, dx10, dx11, dxy0, dxy1;
+
+	RFLOAT d000r, d001r, d010r, d011r, d100r, d101r, d110r, d111r;
+	RFLOAT dx00r, dx01r, dx10r, dx11r, dxy0r, dxy1r;
+	RFLOAT d000i, d001i, d010i, d011i, d100i, d101i, d110i, d111i;
+	RFLOAT dx00i, dx01i, dx10i, dx11i, dxy0i, dxy1i;
+
+	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
+	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
+
+	//�����洢����xyz��������
+	//���Ƕ��̵߳����������������Ҫ�ж���
+	//RFLOAT: xp, yp, zp, fx, fy, fz
+	//Complex: conj_factors
+	//int: x0, x1, y0, y1, z0, z1
+	//���ǣ��������ڵ����񲢲�����ȫ���ô��ǰ���������ֿ�������Ǿ��������ô���ص��������
+	//RFLOAT* xps, *yps, *zps, *fxs, *fys, *fzs;
+	RFLOAT *fxs, *fys, *fzs;
+	RFLOAT *fxs1m, *fys1m, *fzs1m;
+	// int* x0s, *y0s, *z0s;
+	RFLOAT *conj_factors;
+
+	RFLOAT *arr_plus_3d_r;
+	RFLOAT *arr_plus_3d_cri;
+	// Complex* arr_plus_3d_c;
+	// RFLOAT* xps_less_0_factors;
+
+	RFLOAT *all_pone;
+	RFLOAT *all_none;
+
+	RFLOAT *d000rs, *d001rs, *d010rs, *d011rs, *d100rs, *d101rs, *d110rs, *d111rs;
+	RFLOAT *d000is, *d001is, *d010is, *d011is, *d100is, *d101is, *d110is, *d111is;
+	RFLOAT *dd000s, *dd001s, *dd010s, *dd011s, *dd100s, *dd101s, *dd110s, *dd111s;
+	
+	//read Arguments===========================================================/
+	
+	//read-only part
+	int &start = sysu_distributor->pgsArg->start[thread_id];
+	int &end =  sysu_distributor->pgsArg->end[thread_id];
+	int &rmax2 = sysu_distributor->pgsArg->rmax2;
+	Matrix2D<RFLOAT> &R = sysu_distributor->pgsArg->R;
+	MultidimArray<RFLOAT> &sum_weight = sysu_distributor->pgsArg->sum_weight;
+	MultidimArray<Complex > &sum_data = sysu_distributor->pgsArg->sum_data;
+	
+	//write part
+	MultidimArray<RFLOAT> &weight = *(sysu_distributor->pgsArg->weight);
+	MultidimArray<Complex > &data = *(sysu_distributor->pgsArg->data);
+	
+	//shared memory part
+	fxs             = sysu_distributor->pgsArg->fxs             + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	fys             = sysu_distributor->pgsArg->fys             + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	fzs             = sysu_distributor->pgsArg->fzs             + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	fxs1m           = sysu_distributor->pgsArg->fxs1m           + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	fys1m           = sysu_distributor->pgsArg->fys1m           + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	fzs1m           = sysu_distributor->pgsArg->fzs1m           + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	conj_factors    = sysu_distributor->pgsArg->conj_factors    + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	
+	all_pone        = sysu_distributor->pgsArg->all_pone        + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	all_none        = sysu_distributor->pgsArg->all_none        + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	arr_plus_3d_cri = sysu_distributor->pgsArg->arr_plus_3d_cri + sysu_distributor->pgsArg->coor_arr_sz * thread_id * 2; 
+	arr_plus_3d_r   = sysu_distributor->pgsArg->arr_plus_3d_r   + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	
+	d000rs = sysu_distributor->pgsArg->d000rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d001rs = sysu_distributor->pgsArg->d001rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d010rs = sysu_distributor->pgsArg->d010rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d011rs = sysu_distributor->pgsArg->d011rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d100rs = sysu_distributor->pgsArg->d100rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d101rs = sysu_distributor->pgsArg->d101rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d110rs = sysu_distributor->pgsArg->d110rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d111rs = sysu_distributor->pgsArg->d111rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	
+	d000is = sysu_distributor->pgsArg->d000is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d001is = sysu_distributor->pgsArg->d001is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d010is = sysu_distributor->pgsArg->d010is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d011is = sysu_distributor->pgsArg->d011is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d100is = sysu_distributor->pgsArg->d100is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d101is = sysu_distributor->pgsArg->d101is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d110is = sysu_distributor->pgsArg->d110is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	d111is = sysu_distributor->pgsArg->d111is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	
+	dd000s = sysu_distributor->pgsArg->dd000s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	dd001s = sysu_distributor->pgsArg->dd001s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	dd010s = sysu_distributor->pgsArg->dd010s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	dd011s = sysu_distributor->pgsArg->dd011s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	dd100s = sysu_distributor->pgsArg->dd100s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	dd101s = sysu_distributor->pgsArg->dd101s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	dd110s = sysu_distributor->pgsArg->dd110s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	dd111s = sysu_distributor->pgsArg->dd111s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
+	
+	//==========================================================================
+	
+	//printf("Thread %d work with [%d, %d]\n", thread_id, start, end);
+	//usleep(10000 + thread_id * 1000);
+
+	// Loop over all other symmetry operators
+	int xsz = XSIZE(data), yxsz = YXSIZE(data);
+
+	Complex *_datap = data.data;
+	RFLOAT *_weightp = weight.data;
+	
+	// Loop over all points in the output (i.e. rotated, or summed) array
+	for (long int k=start; k<=end; k++)
+	{
+		z = (RFLOAT)k;
+		RFLOAT zr0 = z * R(0, 2);
+		RFLOAT zr1 = z * R(1, 2);
+		RFLOAT zr2 = z * R(2, 2);
+
+		for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++)
+		{
+			y = (RFLOAT)i;
+
+			RFLOAT yr0 = y * R(0, 1);
+			RFLOAT yr1 = y * R(1, 1);
+			RFLOAT yr2 = y * R(2, 1);
+
+			r2yz = y*y + z*z;
+			RFLOAT dist2 = rmax2 - r2yz;
+			if(dist2 < 0)
+				continue;
+
+			//���ǵ��������ǡ���Ρ����������ֻ��Ҫ��¼�����յ�ͺ���
+
+			int arr_it = -1;
+			int j_st = STARTINGX(sum_weight), j_ed = FINISHINGX(sum_weight);
+			int j_act_st = j_st - 1;
+			int j_act_ed = j_st - 2;
+
+			for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
+			{
+				x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
+				r2 = x*x + r2yz;
+
+				if(dist2 < x * x)
+					continue;
+
+				if(j_act_st == j_st - 1)
+					j_act_st = j;//ֻ�ᷢ��һ��
+				j_act_ed = j;//�������һ��
+
+				arr_it = j - j_st;
+				if (x * R(0, 0) + yr0 + zr0 < 0)
+					conj_factors[arr_it] = -1.0;
+				else
+					conj_factors[arr_it] = 1.0;
+			}
+
+
+#pragma ivdep
+			// for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
+			for (long int j=j_act_st; j<=j_act_ed; j++)
+			{
+				arr_it = j - j_st;
+
+				x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
+				r2 = x*x + r2yz;
+
+				xp = x * R(0, 0) + yr0 + zr0;
+				yp = x * R(1, 0) + yr1 + zr1;
+				zp = x * R(2, 0) + yr2 + zr2;
+
+				xp *= conj_factors[arr_it];
+				yp *= conj_factors[arr_it];
+				zp *= conj_factors[arr_it];
+
+				x0 = xp;
+				y0 = FLOOR(yp);
+				z0 = FLOOR(zp);
+
+				fxs[arr_it] = xp - x0;
+				fys[arr_it] = yp - y0;
+				fzs[arr_it] = zp - z0;
+
+				y0 -= STARTINGY(data);
+				z0 -= STARTINGZ(data);
+
+				int em_coord000 = (z0)*yxsz+((y0)*xsz)+(x0);
+				int em_coord001 = em_coord000 + 1;
+				int em_coord010 = em_coord000 + xsz;
+				int em_coord011 = em_coord001 + xsz;
+
+				d000rs[arr_it] = _datap[em_coord000].real;
+				d001rs[arr_it] = _datap[em_coord001].real;
+				d010rs[arr_it] = _datap[em_coord010].real;
+				d011rs[arr_it] = _datap[em_coord011].real;
+				d000is[arr_it] = _datap[em_coord000].imag;
+				d001is[arr_it] = _datap[em_coord001].imag;
+				d010is[arr_it] = _datap[em_coord010].imag;
+				d011is[arr_it] = _datap[em_coord011].imag;
+				dd000s[arr_it] = _weightp[em_coord000];
+				dd001s[arr_it] = _weightp[em_coord001];
+				dd010s[arr_it] = _weightp[em_coord010];
+				dd011s[arr_it] = _weightp[em_coord011];
+
+				fxs1m[arr_it] = 1.0 - fxs[arr_it];
+				fys1m[arr_it] = 1.0 - fys[arr_it];
+				fzs1m[arr_it] = 1.0 - fzs[arr_it];
+
+				int em_coord100 = em_coord000 + yxsz;
+				int em_coord101 = em_coord001 + yxsz;
+				int em_coord110 = em_coord010 + yxsz;
+				int em_coord111 = em_coord011 + yxsz;
+
+				d100rs[arr_it] = _datap[em_coord100].real;
+				d101rs[arr_it] = _datap[em_coord101].real;
+				d110rs[arr_it] = _datap[em_coord110].real;
+				d111rs[arr_it] = _datap[em_coord111].real;
+
+				d100is[arr_it] = _datap[em_coord100].imag;
+				d101is[arr_it] = _datap[em_coord101].imag;
+				d110is[arr_it] = _datap[em_coord110].imag;
+				d111is[arr_it] = _datap[em_coord111].imag;
+
+				dd100s[arr_it] = _weightp[em_coord100];
+				dd101s[arr_it] = _weightp[em_coord101];
+				dd110s[arr_it] = _weightp[em_coord110];
+				dd111s[arr_it] = _weightp[em_coord111];
+			}
+
+			int _iter_3d = (k - STARTINGZ(sum_weight))*yxsz+((i - STARTINGY(sum_weight))*xsz)+(j_st - STARTINGX(sum_weight))
+						   + j_act_st - j_st;
+
+#pragma simd
+			for(int _arr_it = j_act_st - j_st; _arr_it <= j_act_ed - j_st; _arr_it++)
+			{
+				RFLOAT fx = fxs[_arr_it];
+				RFLOAT fy = fys[_arr_it];
+				RFLOAT fz = fzs[_arr_it];
+
+				RFLOAT _fx = fxs1m[_arr_it];
+				RFLOAT _fy = fys1m[_arr_it];
+				RFLOAT _fz = fzs1m[_arr_it];
+
+				d000i = d000is[_arr_it];
+				d001i = d001is[_arr_it];
+				d010i = d010is[_arr_it];
+				d011i = d011is[_arr_it];
+				d100i = d100is[_arr_it];
+				d101i = d101is[_arr_it];
+				d110i = d110is[_arr_it];
+				d111i = d111is[_arr_it];
+				d000r = d000rs[_arr_it];
+				d001r = d001rs[_arr_it];
+				d010r = d010rs[_arr_it];
+				d011r = d011rs[_arr_it];
+				d100r = d100rs[_arr_it];
+				d101r = d101rs[_arr_it];
+				d110r = d110rs[_arr_it];
+				d111r = d111rs[_arr_it];
+
+				dx00i = _fx * d000i + d001i * fx;
+				dx01i = _fx * d100i + d101i * fx;
+				dx10i = _fx * d010i + d011i * fx;
+				dx11i = _fx * d110i + d111i * fx;
+				dxy0i = _fy * dx00i + dx10i * fy;
+				dxy1i = _fy * dx01i + dx11i * fy;
+
+				dx00r = _fx * d000r + d001r * fx;
+				dx01r = _fx * d100r + d101r * fx;
+				dx10r = _fx * d010r + d011r * fx;
+				dx11r = _fx * d110r + d111r * fx;
+				dxy0r = _fy * dx00r + dx10r * fy;
+				dxy1r = _fy * dx01r + dx11r * fy;
+
+				arr_plus_3d_cri[2 * _arr_it] = (_fz * dxy0r + dxy1r * fz);
+				arr_plus_3d_cri[2 * _arr_it + 1] = (_fz * dxy0i + dxy1i * fz) * conj_factors[_arr_it];
+
+				dd000 = dd000s[_arr_it];
+				dd001 = dd001s[_arr_it];
+				dd010 = dd010s[_arr_it];
+				dd011 = dd011s[_arr_it];
+				dd100 = dd100s[_arr_it];
+				dd101 = dd101s[_arr_it];
+				dd110 = dd110s[_arr_it];
+				dd111 = dd111s[_arr_it];
+
+				ddx00 = _fx * dd000 + dd001 * fx;
+				ddx01 = _fx * dd100 + dd101 * fx;
+				ddx10 = _fx * dd010 + dd011 * fx;
+				ddx11 = _fx * dd110 + dd111 * fx;
+				ddxy0 = _fy * ddx00 + ddx10 * fy;
+				ddxy1 = _fy * ddx01 + ddx11 * fy;
+
+				arr_plus_3d_r[_arr_it] = _fz * ddxy0, ddxy1 * fz;
+			} // end loop over all elements of sum_weight
+
+			RFP_ARR_PLUS((RFLOAT*)&sum_data.data[_iter_3d], &arr_plus_3d_cri[j_act_st - j_st], 2 * (j_act_ed - j_act_st + 1));
+			RFP_ARR_PLUS(&sum_weight.data[_iter_3d], &arr_plus_3d_r[j_act_st - j_st], (j_act_ed - j_act_st + 1));
+		}
+	}
+}
+
 void BackProjector::applyPointGroupSymmetry()
 {
 
 //#define DEBUG_SYMM
 #ifdef DEBUG_SYMM
-    std::cerr << " SL.SymsNo()= " << SL.SymsNo() << std::endl;
-    std::cerr << " SL.true_symNo= " << SL.true_symNo << std::endl;
+	std::cerr << " SL.SymsNo()= " << SL.SymsNo() << std::endl;
+	std::cerr << " SL.true_symNo= " << SL.true_symNo << std::endl;
 #endif
-
-    int rmax2 = ROUND(r_max * padding_factor) * ROUND(r_max * padding_factor);
-    if (SL.SymsNo() > 0 && ref_dim == 3)
-    {
-        Matrix2D<RFLOAT> L(4, 4), R(4, 4); // A matrix from the list
-        MultidimArray<RFLOAT> sum_weight;
-        MultidimArray<Complex > sum_data;
-        RFLOAT x, y, z, xp, yp, zp, r2, r2yz;
-        //RFLOAT x, y, z, fx, fy, fz, r2, r2yz;
-        //bool is_neg_x;
-        int x0, y0, z0;
-        // Complex d000, d001, d010, d011, d100, d101, d110, d111;
-        // Complex dx00, dx01, dx10, dx11, dxy0, dxy1;
-
-        RFLOAT d000r, d001r, d010r, d011r, d100r, d101r, d110r, d111r;
-        RFLOAT dx00r, dx01r, dx10r, dx11r, dxy0r, dxy1r;
-        RFLOAT d000i, d001i, d010i, d011i, d100i, d101i, d110i, d111i;
-        RFLOAT dx00i, dx01i, dx10i, dx11i, dxy0i, dxy1i;
-
-        RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
-        RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
-
-        //创建存储所有xyz坐标的数组
-        //考虑多线程的情况，这个数组可能需要有多个复本
-        //RFLOAT: xp, yp, zp, fx, fy, fz
-        //Complex: conj_factors
-        //int: x0, x1, y0, y1, z0, z1
-        //但是，我们现在的任务并不是完全将访存和前面的坐标计算分开来，而是尽量避免与访存相关的条件计算
-        //RFLOAT* xps, *yps, *zps, *fxs, *fys, *fzs;
-        RFLOAT *fxs, *fys, *fzs;
-        RFLOAT *fxs1m, *fys1m, *fzs1m;
-        // int* x0s, *y0s, *z0s;
-        RFLOAT* conj_factors;
-
-        RFLOAT* arr_plus_3d_r;
-        RFLOAT* arr_plus_3d_cri;
-        // Complex* arr_plus_3d_c;
-        // RFLOAT* xps_less_0_factors;
-
-        RFLOAT* all_pone;
-        RFLOAT* all_none;
-
+	
+	if (SL.SymsNo() > 0 && ref_dim == 3)
+	{
+		SysuTaskDistributor *sysu_distributor = SysuTaskDistributor::getInstance(SYSU_CPU_PARALLEL);
+		ThreadManager *task_manager = ThreadManager::getInstance(SYSU_CPU_PARALLEL);
+		
+		//push myself into ThreadManager's workClass stack
+		task_manager->pushWorkClass(this);
+		
         // First symmetry operator (not stored in SL) is the identity matrix
-        sum_weight = weight;
-        sum_data = data;
-        RFLOAT *d000rs, *d001rs, *d010rs, *d011rs, *d100rs, *d101rs, *d110rs, *d111rs, *d000is, *d001is, *d010is, *d011is, *d100is, *d101is, *d110is, *d111is, *dd000s, *dd001s, *dd010s, *dd011s, *dd100s, *dd101s, *dd110s, *dd111s;
-
-        int tmp_coor_arr_sz = FINISHINGX(sum_weight) - STARTINGX(sum_weight) + 1;
-        if(tmp_coor_arr_sz > 0)
-        {
-            // x0s = (int*)malloc(sizeof(int) * tmp_coor_arr_sz);
-            // y0s = (int*)malloc(sizeof(int) * tmp_coor_arr_sz);
-            // z0s = (int*)malloc(sizeof(int) * tmp_coor_arr_sz);
-            // xps = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            // yps = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            // zps = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            fxs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            fys = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            fzs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            fxs1m = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            fys1m = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            fzs1m = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            conj_factors = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            // xps_less_0_factors = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            all_pone = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            all_none = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            arr_plus_3d_r = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            arr_plus_3d_cri = (RFLOAT*)malloc(sizeof(Complex) * tmp_coor_arr_sz);
-
-            d000rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d001rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d010rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d011rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d100rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d101rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d110rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d111rs = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d000is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d001is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d010is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d011is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d100is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d101is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d110is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            d111is = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd000s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd001s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd010s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd011s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd100s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd101s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd110s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-            dd111s = (RFLOAT*)malloc(sizeof(RFLOAT) * tmp_coor_arr_sz);
-
-            for(int i = 0; i < tmp_coor_arr_sz; i++)
-            {
-                all_pone[i] = 1.0;
-                all_none[i] = -1.0;
-            }
-        }
-
-        //printf("tmp_coor_arr_sz = %d \n", tmp_coor_arr_sz);
-
-        // Loop over all other symmetry operators
-        int xsz = XSIZE(data), yxsz = YXSIZE(data);
-
-        Complex* _datap = data.data;
-        RFLOAT* _weightp = weight.data;
-
-        for (int isym = 0; isym < SL.SymsNo(); isym++)
-        {
-            SL.get_matrices(isym, L, R);
+		int rmax2 = ROUND(r_max * padding_factor) * ROUND(r_max * padding_factor);
+		sysu_distributor->preparePiontGroupSymmetry(weight, data, rmax2);
+		sysu_distributor->distributePointGroupSymmetry();
+		
+		// Loop over all other symmetry operators
+	    for (int isym = 0; isym < SL.SymsNo(); isym++)
+	    {
+	        SL.get_matrices(isym, sysu_distributor->pgsArg->L, sysu_distributor->pgsArg->R);
 #ifdef DEBUG_SYMM
-            std::cerr << " isym= " << isym << " R= " << R << std::endl;
+	        std::cerr << " isym= " << isym << " R= " << sysu_distributor->pgsArg->R << std::endl;
 #endif
-            //FOR_ALL_ELEMENTS_IN_ARRAY3D(sum_weight)
+			task_manager->run(globalThreadApplyPointGroupSymmetry);
+			
+			if (threadException != NULL)
+				throw *threadException;
 
-            for (long int k=STARTINGZ(sum_weight); k<=FINISHINGZ(sum_weight); k++)
-            {
-                z = (RFLOAT)k;
-                RFLOAT zr0 = z * R(0, 2);
-                RFLOAT zr1 = z * R(1, 2);
-                RFLOAT zr2 = z * R(2, 2);
-
-                for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++)
-                {
-                    y = (RFLOAT)i;
-
-                    RFLOAT yr0 = y * R(0, 1);
-                    RFLOAT yr1 = y * R(1, 1);
-                    RFLOAT yr2 = y * R(2, 1);
-
-                    r2yz = y*y + z*z;
-                    RFLOAT dist2 = rmax2 - r2yz;
-                    if(dist2 < 0)
-                        continue;
-
-                    //考虑到不可能是“两段”满足情况，我只需要记录起点和终点就好了
-
-                    int arr_it = -1;
-                    int j_st = STARTINGX(sum_weight), j_ed = FINISHINGX(sum_weight);
-                    int j_act_st = j_st - 1;
-                    int j_act_ed = j_st - 2;
-
-                    for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
-                    {
-                        x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
-                        r2 = x*x + r2yz;
-
-                        if(dist2 < x * x)
-                            continue;
-
-                        if(j_act_st == j_st - 1)
-                            j_act_st = j;//只会发生一次
-                        j_act_ed = j;//保留到最后一次
-
-                        arr_it = j - j_st;
-                        if (x * R(0, 0) + yr0 + zr0 < 0)
-                            conj_factors[arr_it] = -1.0;
-                        else
-                            conj_factors[arr_it] = 1.0;
-                    }
-
-
-#pragma ivdep
-                    // for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
-                    for (long int j=j_act_st; j<=j_act_ed; j++)
-                    {
-                        arr_it = j - j_st;
-
-                        x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
-                        r2 = x*x + r2yz;
-
-                        xp = x * R(0, 0) + yr0 + zr0;
-                        yp = x * R(1, 0) + yr1 + zr1;
-                        zp = x * R(2, 0) + yr2 + zr2;
-
-                        xp *= conj_factors[arr_it];
-                        yp *= conj_factors[arr_it];
-                        zp *= conj_factors[arr_it];
-
-                        x0 = xp;
-                        y0 = FLOOR(yp);
-                        z0 = FLOOR(zp);
-
-                        fxs[arr_it] = xp - x0;
-                        fys[arr_it] = yp - y0;
-                        fzs[arr_it] = zp - z0;
-
-                        y0 -= STARTINGY(data);
-                        z0 -= STARTINGZ(data);
-
-                        int em_coord000 = (z0)*yxsz+((y0)*xsz)+(x0);
-                        int em_coord001 = em_coord000 + 1;
-                        int em_coord010 = em_coord000 + xsz;
-                        int em_coord011 = em_coord001 + xsz;
-
-                        d000rs[arr_it] = _datap[em_coord000].real;
-                        d001rs[arr_it] = _datap[em_coord001].real;
-                        d010rs[arr_it] = _datap[em_coord010].real;
-                        d011rs[arr_it] = _datap[em_coord011].real;
-                        d000is[arr_it] = _datap[em_coord000].imag;
-                        d001is[arr_it] = _datap[em_coord001].imag;
-                        d010is[arr_it] = _datap[em_coord010].imag;
-                        d011is[arr_it] = _datap[em_coord011].imag;
-                        dd000s[arr_it] = _weightp[em_coord000];
-                        dd001s[arr_it] = _weightp[em_coord001];
-                        dd010s[arr_it] = _weightp[em_coord010];
-                        dd011s[arr_it] = _weightp[em_coord011];
-
-                        fxs1m[arr_it] = 1.0 - fxs[arr_it];
-                        fys1m[arr_it] = 1.0 - fys[arr_it];
-                        fzs1m[arr_it] = 1.0 - fzs[arr_it];
-
-                        int em_coord100 = em_coord000 + yxsz;
-                        int em_coord101 = em_coord001 + yxsz;
-                        int em_coord110 = em_coord010 + yxsz;
-                        int em_coord111 = em_coord011 + yxsz;
-
-                        d100rs[arr_it] = _datap[em_coord100].real;
-                        d101rs[arr_it] = _datap[em_coord101].real;
-                        d110rs[arr_it] = _datap[em_coord110].real;
-                        d111rs[arr_it] = _datap[em_coord111].real;
-
-                        d100is[arr_it] = _datap[em_coord100].imag;
-                        d101is[arr_it] = _datap[em_coord101].imag;
-                        d110is[arr_it] = _datap[em_coord110].imag;
-                        d111is[arr_it] = _datap[em_coord111].imag;
-
-                        dd100s[arr_it] = _weightp[em_coord100];
-                        dd101s[arr_it] = _weightp[em_coord101];
-                        dd110s[arr_it] = _weightp[em_coord110];
-                        dd111s[arr_it] = _weightp[em_coord111];
-                    }
-
-                    int _iter_3d = (k - STARTINGZ(sum_weight))*yxsz+((i - STARTINGY(sum_weight))*xsz)+(j_st - STARTINGX(sum_weight))
-                                   + j_act_st - j_st;
-
-#pragma simd
-
-                    for(int _arr_it = j_act_st - j_st; _arr_it <= j_act_ed - j_st; _arr_it++)
-                    {
-                        RFLOAT fx = fxs[_arr_it];
-                        RFLOAT fy = fys[_arr_it];
-                        RFLOAT fz = fzs[_arr_it];
-
-                        RFLOAT _fx = fxs1m[_arr_it];
-                        RFLOAT _fy = fys1m[_arr_it];
-                        RFLOAT _fz = fzs1m[_arr_it];
-
-                        d000i = d000is[_arr_it];
-                        d001i = d001is[_arr_it];
-                        d010i = d010is[_arr_it];
-                        d011i = d011is[_arr_it];
-                        d100i = d100is[_arr_it];
-                        d101i = d101is[_arr_it];
-                        d110i = d110is[_arr_it];
-                        d111i = d111is[_arr_it];
-                        d000r = d000rs[_arr_it];
-                        d001r = d001rs[_arr_it];
-                        d010r = d010rs[_arr_it];
-                        d011r = d011rs[_arr_it];
-                        d100r = d100rs[_arr_it];
-                        d101r = d101rs[_arr_it];
-                        d110r = d110rs[_arr_it];
-                        d111r = d111rs[_arr_it];
-
-                        dx00i = _fx * d000i + d001i * fx;
-                        dx01i = _fx * d100i + d101i * fx;
-                        dx10i = _fx * d010i + d011i * fx;
-                        dx11i = _fx * d110i + d111i * fx;
-                        dxy0i = _fy * dx00i + dx10i * fy;
-                        dxy1i = _fy * dx01i + dx11i * fy;
-
-                        dx00r = _fx * d000r + d001r * fx;
-                        dx01r = _fx * d100r + d101r * fx;
-                        dx10r = _fx * d010r + d011r * fx;
-                        dx11r = _fx * d110r + d111r * fx;
-                        dxy0r = _fy * dx00r + dx10r * fy;
-                        dxy1r = _fy * dx01r + dx11r * fy;
-
-                        arr_plus_3d_cri[2 * _arr_it] = (_fz * dxy0r + dxy1r * fz);
-                        arr_plus_3d_cri[2 * _arr_it + 1] = (_fz * dxy0i + dxy1i * fz) * conj_factors[_arr_it];
-
-                        dd000 = dd000s[_arr_it];
-                        dd001 = dd001s[_arr_it];
-                        dd010 = dd010s[_arr_it];
-                        dd011 = dd011s[_arr_it];
-                        dd100 = dd100s[_arr_it];
-                        dd101 = dd101s[_arr_it];
-                        dd110 = dd110s[_arr_it];
-                        dd111 = dd111s[_arr_it];
-
-                        ddx00 = _fx * dd000 + dd001 * fx;
-                        ddx01 = _fx * dd100 + dd101 * fx;
-                        ddx10 = _fx * dd010 + dd011 * fx;
-                        ddx11 = _fx * dd110 + dd111 * fx;
-                        ddxy0 = _fy * ddx00 + ddx10 * fy;
-                        ddxy1 = _fy * ddx01 + ddx11 * fy;
-
-                        arr_plus_3d_r[_arr_it] = _fz * ddxy0, ddxy1 * fz;
-                    } // end loop over all elements of sum_weight
-
-                    RFP_ARR_PLUS((RFLOAT*)&sum_data.data[_iter_3d], (RFLOAT*)&arr_plus_3d_cri[j_act_st - j_st], 2 * (j_act_ed - j_act_st + 1));
-                    RFP_ARR_PLUS(&sum_weight.data[_iter_3d], &arr_plus_3d_r[j_act_st - j_st], (j_act_ed - j_act_st + 1));
-                }
-            }
-
-
-
-        } // end loop over symmetry operators
-
-        data = sum_data;
-        weight = sum_weight;
-        // Average
-        // The division should only be done if we would search all (C1) directions, not if we restrict the angular search!
-        /*
-        FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(data)
-        {
-            DIRECT_MULTIDIM_ELEM(data, n) = DIRECT_MULTIDIM_ELEM(sum_data, n) / (RFLOAT)(SL.SymsNo() + 1);
-            DIRECT_MULTIDIM_ELEM(weight, n) = DIRECT_MULTIDIM_ELEM(sum_weight, n) / (RFLOAT)(SL.SymsNo() + 1);
-        }
-        */
-
-        if(tmp_coor_arr_sz > 0)
-        {
-            //free(xps); free(yps); free(zps);
-            // free(x0s); free(y0s); free(z0s);
-            free(fxs); free(fys); free(fzs);
-            free(conj_factors);
-            // free(xps_less_0_factors);
-            free(all_pone);
-            free(all_none);
-            free(arr_plus_3d_cri);
-            free(arr_plus_3d_r);
-            free(d000rs);
-            free(d001rs);
-            free(d010rs);
-            free(d011rs);
-            free(d100rs);
-            free(d101rs);
-            free(d110rs);
-            free(d111rs);
-            free(d000is);
-            free(d001is);
-            free(d010is);
-            free(d011is);
-            free(d100is);
-            free(d101is);
-            free(d110is);
-            free(d111is);
-            free(dd000s);
-            free(dd001s);
-            free(dd010s);
-            free(dd011s);
-            free(dd100s);
-            free(dd101s);
-            free(dd110s);
-            free(dd111s);
-        }
-    }
-
+	    } // end loop over symmetry operators
+		
+	    data = sysu_distributor->pgsArg->sum_data;
+	    weight = sysu_distributor->pgsArg->sum_weight;
+		
+		//pop myself from workClass stack
+		task_manager->popWorkClass();
+		sysu_distributor->recyclePointGroupSymmetry();
+		
+		//printf("ApplyPointGroupSymmetry Finish\n");
+	    // Average
+	    // The division should only be done if we would search all (C1) directions, not if we restrict the angular search!
+	    /*
+	    FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(data)
+	    {
+	    	DIRECT_MULTIDIM_ELEM(data, n) = DIRECT_MULTIDIM_ELEM(sum_data, n) / (RFLOAT)(SL.SymsNo() + 1);
+	    	DIRECT_MULTIDIM_ELEM(weight, n) = DIRECT_MULTIDIM_ELEM(sum_weight, n) / (RFLOAT)(SL.SymsNo() + 1);
+	    }
+	    */
+	}
 }
 
 void BackProjector::convoluteBlobRealSpace(FourierTransformer &transformer, bool do_mask)

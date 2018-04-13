@@ -89,7 +89,7 @@ void MlOptimiserMpi::initialise()
 #endif
 	// Print information about MPI nodes:
     if (!do_movies_in_batches)
-    	printMpiNodesMachineNames(*node, nr_threads);
+    	printMpiNodesMachineNames(*node, nr_threads, sysu_cpu_threads);
 #ifdef CUDA
     /************************************************************************/
 	//Setup GPU related resources
@@ -1894,7 +1894,7 @@ void MlOptimiserMpi::maximization()
 
 	if (verb > 0)
 	{
-		std::cout << " Maximization ..."<< std::endl;
+		std::cout << "\n Maximization ..."<< std::endl;
 		init_progress_bar(mymodel.nr_classes);
 	}
 

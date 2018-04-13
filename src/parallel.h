@@ -48,10 +48,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "src/error.h"
+#include "src/sysu_stack.h"
+#include "src/matrix2d.h"
+#include "src/multidim_array.h"
+#include "src/complex.h"
 
 // This code was copied from a developmental version of Xmipp-3.0
 // which is developed at the Biocomputing Unit of the National Center for Biotechnology - CSIC
 // in Madrid , Spain
+
+#define GENERAL_PARALLEL 0
+#define SYSU_CPU_PARALLEL 1
 
 
 class ThreadManager;
@@ -196,12 +203,61 @@ private:
     ThreadFunction workFunction;
     bool started;
     void * workClass;
+	
+	SysuStack workClass_stack;
 
     void startThreads();
+	
+	/** Constructor, number of working threads should be supplied */
+    ThreadManager(int numberOfThreads, void * workClass = NULL);
 
 public:
-    /** Constructor, number of working threads should be supplied */
-    ThreadManager(int numberOfThreads, void * workClass = NULL);
+    static ThreadManager * instances[2];
+	static ThreadManager * newInstance(int index, int numberOfThreads, void * workClass = NULL)
+	{
+		if (instances[index] == NULL)
+		{
+			instances[index] = new ThreadManager(numberOfThreads, workClass);
+		}
+		else
+		{
+			delete instances[index];
+			instances[index] = new ThreadManager(numberOfThreads, workClass);
+		}
+		return instances[index];
+	}
+	
+	static ThreadManager * getInstance(int index)
+	{
+		return instances[index];
+	}
+	
+	static void freeInstance(int index)
+	{
+		if (instances[index] != NULL)
+		{
+			delete instances[index];
+			instances[index] = NULL;
+		}
+	}
+	
+	bool pushWorkClass(void * workClass)
+	{
+		bool status = workClass_stack.push(this->workClass);
+		if(status)
+			this->workClass = workClass;
+		return status;
+	}
+	
+	bool popWorkClass() {
+		bool status = !workClass_stack.empty();
+		if(status)
+		{
+			workClass = workClass_stack.top();
+			workClass_stack.pop();
+		}
+		return status;
+	}
 
     /** Destructor, free memory and exit threads */
     ~ThreadManager();
@@ -379,6 +435,248 @@ protected:
     virtual bool distribute(size_t &first, size_t &last);
 };//end of class ThreadTaskDistributor
 
+//===================== FOR SYSU ===============================
+
+class PointGroupSymmetryArgument
+{
+public:
+	int *start, *end;
+	Matrix2D<RFLOAT> L, R;
+	MultidimArray<RFLOAT> sum_weight;
+	MultidimArray<Complex > sum_data;
+	MultidimArray<RFLOAT> *weight;
+	MultidimArray<Complex > *data;
+	int rmax2;
+	
+	int coor_arr_sz;
+	
+	RFLOAT *fxs, *fys, *fzs;
+	RFLOAT *fxs1m, *fys1m, *fzs1m;
+	RFLOAT *conj_factors;
+
+	RFLOAT *arr_plus_3d_r;
+	RFLOAT *arr_plus_3d_cri;
+
+	RFLOAT *all_pone;
+	RFLOAT *all_none;
+
+	RFLOAT *d000rs, *d001rs, *d010rs, *d011rs, *d100rs, *d101rs, *d110rs, *d111rs;
+	RFLOAT *d000is, *d001is, *d010is, *d011is, *d100is, *d101is, *d110is, *d111is;
+	RFLOAT *dd000s, *dd001s, *dd010s, *dd011s, *dd100s, *dd101s, *dd110s, *dd111s;
+	
+	PointGroupSymmetryArgument(int nr_threads):
+		start(new int[nr_threads]),
+		end(new int[nr_threads]),
+		L(4, 4), R(4, 4)
+	{
+		//printf("PointGroupSymmetryArgument construct with nr_threads=%d\n", nr_threads);
+	}
+	
+	~PointGroupSymmetryArgument()
+	{
+		//printf("PointGroupSymmetryArgument destroy\n");
+		delete start;
+		delete end;
+	}
+};
+
+class SysuTaskDistributor
+{
+private:
+	SysuTaskDistributor(const int &nr_threads):
+		nr_threads(nr_threads),
+		pgsArg(NULL)
+	{}
+	
+public:
+	static SysuTaskDistributor *instances[2];
+	
+	static SysuTaskDistributor* newInstance(const int &index, const int &nr_threads)
+	{
+		if (instances[index] == NULL)
+		{
+			instances[index] = new SysuTaskDistributor(nr_threads);
+		}
+		else
+		{
+			delete instances[index];
+			instances[index] = new SysuTaskDistributor(nr_threads);
+		}
+		return instances[index];
+	}
+	
+	static SysuTaskDistributor* getInstance(const int &index)
+	{
+		return instances[index];
+	}
+	
+	static void freeInstance(const int &index)
+	{
+		if (instances[index] != NULL)
+		{
+			delete instances[index];
+			instances[index] = NULL;
+		}
+	}
+	
+	// domain is [first, last], not [first, last)
+	static int getBlockSize(const int &block_id, const int &total_blocks, const int &first, const int &last)
+	{
+		int n = last - first + 1;
+		return (n / total_blocks) + ((n % total_blocks > block_id) ? 1 : 0);
+	}
+
+	// domain is [first, last], not [first, last)
+	static int getBlockOffset(const int &block_id, const int &total_blocks, const int &first, const int &last)
+	{
+		int n = last - first + 1;
+		int offset = (n / total_blocks) * block_id + ((n % total_blocks > block_id) ? block_id : n % total_blocks);
+		return offset + first;
+	}
+	
+	int nr_threads;
+	
+	~SysuTaskDistributor()
+	{
+		if (pgsArg != NULL)
+			delete pgsArg;
+	}
+	
+	//PointGroupSymmetry section ===================================
+	
+	PointGroupSymmetryArgument * pgsArg;
+	
+	void preparePiontGroupSymmetry(
+		MultidimArray<RFLOAT> &weight,
+		MultidimArray<Complex > &data,
+		int rmax2
+	)
+	{
+		if (pgsArg != NULL)
+			recyclePointGroupSymmetry();
+		pgsArg = new PointGroupSymmetryArgument(nr_threads);
+	
+		pgsArg->weight = &weight;
+		pgsArg->data = &data;
+		pgsArg->sum_weight = weight;
+		pgsArg->sum_data = data;
+		pgsArg->rmax2 = rmax2;
+	}
+	
+	void distributePointGroupSymmetry()
+	{
+		int first = STARTINGZ(pgsArg->sum_weight);
+		int last = FINISHINGZ(pgsArg->sum_weight);
+		
+		for (int i = 0; i < nr_threads; ++i)
+		{
+			int start = getBlockOffset(i, nr_threads, first, last);
+			int size = getBlockSize(i, nr_threads, first, last);
+			pgsArg->start[i] = start;
+			pgsArg->end[i] = start + size - 1;
+		}
+		
+		int coor_arr_sz         = FINISHINGX(pgsArg->sum_weight) - STARTINGX(pgsArg->sum_weight) + 3;
+		
+		pgsArg->coor_arr_sz     = coor_arr_sz;
+		
+		pgsArg->fxs             = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fys             = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fzs             = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fxs1m           = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fys1m           = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->fzs1m           = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->conj_factors    = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->all_pone        = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->all_none        = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->arr_plus_3d_r   = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->arr_plus_3d_cri = new RFLOAT[coor_arr_sz * nr_threads * 2];
+
+		pgsArg->d000rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d001rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d010rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d011rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d100rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d101rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d110rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d111rs          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d000is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d001is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d010is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d011is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d100is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d101is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d110is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->d111is          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd000s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd001s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd010s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd011s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd100s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd101s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd110s          = new RFLOAT[coor_arr_sz * nr_threads];
+		pgsArg->dd111s          = new RFLOAT[coor_arr_sz * nr_threads];
+
+		for(int j = 0; j < coor_arr_sz; j++)
+		{
+			pgsArg->all_pone[j] = 1.0;
+			pgsArg->all_none[j] = -1.0;
+		}
+	}
+	
+	void recyclePointGroupSymmetry()
+	{
+		if (pgsArg != NULL)
+		{
+			delete pgsArg->fxs;
+			delete pgsArg->fys;
+			delete pgsArg->fzs;
+			
+			delete pgsArg->fxs1m;
+			delete pgsArg->fys1m;
+			delete pgsArg->fzs1m;
+			
+			delete pgsArg->conj_factors;
+
+			delete pgsArg->arr_plus_3d_r;
+			delete pgsArg->arr_plus_3d_cri;
+
+			delete pgsArg->all_pone;
+			delete pgsArg->all_none;
+			
+			delete pgsArg->d000rs;
+			delete pgsArg->d001rs;
+			delete pgsArg->d010rs;
+			delete pgsArg->d011rs;
+			delete pgsArg->d100rs;
+			delete pgsArg->d101rs;
+			delete pgsArg->d110rs;
+			delete pgsArg->d111rs;
+			
+			delete pgsArg->d000is;
+			delete pgsArg->d001is;
+			delete pgsArg->d010is;
+			delete pgsArg->d011is;
+			delete pgsArg->d100is;
+			delete pgsArg->d101is;
+			delete pgsArg->d110is;
+			delete pgsArg->d111is;
+			
+			delete pgsArg->dd000s;
+			delete pgsArg->dd001s;
+			delete pgsArg->dd010s;
+			delete pgsArg->dd011s;
+			delete pgsArg->dd100s;
+			delete pgsArg->dd101s;
+			delete pgsArg->dd110s;
+			delete pgsArg->dd111s;
+			
+			delete pgsArg;
+		}
+		pgsArg = NULL;
+	}
+	
+};
 
 /// @name Miscellaneous functions
 //@{

@@ -95,7 +95,7 @@ public:
 };
 
 // General function to print machinenames on all MPI nodes
-void printMpiNodesMachineNames(MpiNode &node, int nthreads = 1);
+void printMpiNodesMachineNames(MpiNode &node, int nthreads = 1, int sysu_cpu_threads = 1);
 
 
 #endif /* MPI_H_ */

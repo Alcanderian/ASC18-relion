@@ -32,6 +32,7 @@
 #include "src/mask.h"
 #include "src/tabfuncs.h"
 #include "src/symmetries.h"
+#include "src/parallel.h"
 
 class BackProjector: public Projector
 {
@@ -56,7 +57,9 @@ public:
 
     // Skip the iterative gridding part of the reconstruction
     bool skip_gridding;
-
+	
+	//for catching exceptions in threads
+	RelionError * threadException;
 
 public:
 
@@ -101,6 +104,7 @@ public:
     	// Sjors 8aug2017: try to fix problems with pad1 reconstrctions
     	tab_ftblob.initialise(_blob_radius * 2., _blob_alpha, _blob_order, 10000);
 
+		threadException = NULL;
 	}
 
     /** Copy constructor
@@ -143,6 +147,7 @@ public:
         	tab_ftblob = op.tab_ftblob;
         	SL = op.SL;
         }
+		threadException = NULL;
         return *this;
     }
 
@@ -163,6 +168,7 @@ public:
 	{
 		skip_gridding = false;
 		weight.clear();
+		threadException = NULL;
 		Projector::clear();
 	}
 
@@ -292,6 +298,7 @@ public:
 
 	/* Applies the symmetry from the SymList object to the weight and the data array
 	 */
+	void doThreadApplyPointGroupSymmetry(int thread_id);
 	void applyPointGroupSymmetry();
 
 
