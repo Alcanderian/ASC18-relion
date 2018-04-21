@@ -2201,6 +2201,8 @@ void MlOptimiserMpi::maximization()
 						int reconstruct_rank = 2 * (ith_recons % ( (node->size - 1)/2 ) ) + ihalfset; // first pass halfset1, second pass halfset2
 						int my_first_recv = node->myRandomSubset();
 
+						//ADD BARRIER, NEED TEST TIME USAGE
+						MPI_Barrier(MPI_COMM_WORLD);
 						for (int recv_node = my_first_recv; recv_node < node->size; recv_node += nr_halfsets)
 						{
 							if (node->rank == reconstruct_rank && recv_node != node->rank)

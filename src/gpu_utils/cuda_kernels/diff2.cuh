@@ -34,10 +34,11 @@ __global__ void cuda_kernel_diff2_coarse(
 		int image_size
 		)
 {
+	//int bid = blockIdx.x;
 	int tid = threadIdx.x;
 
 	//Prefetch euler matrices
-	__shared__ XFLOAT s_eulers[eulers_per_block * 9];
+	__shared__ XFLOAT s_eulers[eulers_per_block * 9]; //max = 32 * 9 * 4 = 1152 B
 
 	int max_block_pass_euler( ceilfracf(eulers_per_block*9, block_sz) * block_sz);
 
@@ -46,13 +47,18 @@ __global__ void cuda_kernel_diff2_coarse(
 			s_eulers[i] = g_eulers[blockIdx.x * eulers_per_block * 9 + i];
 
 
-	//Setup variables
-	__shared__ XFLOAT s_ref_real[block_sz/prefetch_fraction * eulers_per_block];
-	__shared__ XFLOAT s_ref_imag[block_sz/prefetch_fraction * eulers_per_block];
+	//Setup variables, block_sz * eulers_per_block = 2048, 4096, 8192
+	__shared__ XFLOAT s_ref_real[block_sz/prefetch_fraction * eulers_per_block]; // max = 2048 * 8 / 4 * 4 = 16 KB
+	__shared__ XFLOAT s_ref_imag[block_sz/prefetch_fraction * eulers_per_block]; // max = 2048 * 8 / 4 * 4 = 16 KB
 
-	__shared__ XFLOAT s_real[block_sz];
-	__shared__ XFLOAT s_imag[block_sz];
-	__shared__ XFLOAT s_corr[block_sz];
+	__shared__ XFLOAT s_real[block_sz]; //max = 128 * 8 * 4 = 4 KB
+	__shared__ XFLOAT s_imag[block_sz]; //max = 128 * 8 * 4 = 4 KB
+	__shared__ XFLOAT s_corr[block_sz]; //max = 128 * 8 * 4 = 4 KB
+
+	//total max = 32 + 12 + 1 = 45 KB, and shared memory per block = 48 KB !!!???
+
+	//use too much shared memory, only 3kb left, but we need MAX = 2048 * 8 * 4 = 64 KB !!!????
+	//__shared__ XFLOAT s_diff2s[block_sz * eulers_per_block];
 
 	XFLOAT diff2s[eulers_per_block] = {0.f};
 
@@ -181,10 +187,37 @@ __global__ void cuda_kernel_diff2_coarse(
 		}
 	}
 
+	__syncthreads();
+
+//#define S_DIFF2S s_ref_real
+	//Map
+	//#pragma unroll
+	//for (int j = 0; j < eulers_per_block; j ++)
+	//	S_DIFF2S[tid * eulers_per_block + j] = diff2s[j];
+
+	//__syncthreads();
+
+	//Reduce1
+	//FIXME
+	//for(int j=(block_sz/2); j>0; j/=2)
+	//{
+	//	if(tid<j)
+	//	{
+	//		#pragma unroll
+	//		for (int i=0; i<eulers_per_block; i++)
+	//		{
+	//			s_diff2s[eulers_per_block * tid + i] += s_diff2s[eulers_per_block * (tid + j) + i];
+	//		}
+	//	}
+	//	__syncthreads();
+	//}
+
 	//Set global
 	#pragma unroll
 	for (int i = 0; i < eulers_per_block; i ++)
 		cuda_atomic_add(&g_diff2s[(blockIdx.x * eulers_per_block + i) * translation_num + tid % translation_num], diff2s[i]);
+
+//#undef S_DIFF2S
 }
 
 
