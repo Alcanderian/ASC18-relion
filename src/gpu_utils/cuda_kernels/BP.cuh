@@ -237,10 +237,10 @@ __global__ void cuda_kernel_backproject3D(
 
 	extern __shared__ XFLOAT buffer[];
 	//opt by ljx prefetch data
-	XFLOAT * s_weights			= &buffer[0];
-	XFLOAT * s_trans_x			= &buffer[translation_num];
-	XFLOAT * s_trans_y			= &buffer[2*translation_num];
-	XFLOAT * s_trans_z			= &buffer[3*translation_num];
+	XFLOAT * s_weights			= &buffer[0]; // size = translation_num
+	XFLOAT * s_trans_x			= &buffer[translation_num]; // size = translation_num
+	XFLOAT * s_trans_y			= &buffer[2*translation_num]; // size = translation_num
+	XFLOAT * s_trans_z			= &buffer[3*translation_num]; // size = translation_num
 
 	eulers[0] = __ldg(&g_eulers[img*9+0]);
 	eulers[1] = __ldg(&g_eulers[img*9+1]);
