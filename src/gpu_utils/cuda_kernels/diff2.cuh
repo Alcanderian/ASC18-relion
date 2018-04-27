@@ -34,31 +34,43 @@ __global__ void cuda_kernel_diff2_coarse(
 		int image_size
 		)
 {
+	//int bid = blockIdx.x;
 	int tid = threadIdx.x;
 
-	//Prefetch euler matrices
-	__shared__ XFLOAT s_eulers[eulers_per_block * 9];
+	extern __shared__ XFLOAT buffer[];
+
+	//Prefetch euler matrices, this is too big that I can't make it be a register array.
+	XFLOAT * s_eulers = &buffer[0]; // size = eulers_per_block * 9 //max = 32 * 9 * 4 = 1152 B
 
 	int max_block_pass_euler( ceilfracf(eulers_per_block*9, block_sz) * block_sz);
 
 	for (int i = tid; i < max_block_pass_euler; i += block_sz)
 		if (i < eulers_per_block * 9)
-			s_eulers[i] = g_eulers[blockIdx.x * eulers_per_block * 9 + i];
+			s_eulers[i] = __ldg(&g_eulers[blockIdx.x * eulers_per_block * 9 + i]);
 
 
-	//Setup variables
-	__shared__ XFLOAT s_ref_real[block_sz/prefetch_fraction * eulers_per_block];
-	__shared__ XFLOAT s_ref_imag[block_sz/prefetch_fraction * eulers_per_block];
+	//Setup variables, block_sz * eulers_per_block = 2048, 4096, 8192
+	XFLOAT * s_ref_real = &buffer[eulers_per_block * 9];                                //[block_sz/prefetch_fraction * eulers_per_block]; // max = 2048 * 8 / 4 * 4 = 16 KB
+	XFLOAT * s_ref_imag = &buffer[(9 + block_sz/prefetch_fraction) * eulers_per_block]; //[block_sz/prefetch_fraction * eulers_per_block]; // max = 2048 * 8 / 4 * 4 = 16 KB
 
-	__shared__ XFLOAT s_real[block_sz];
-	__shared__ XFLOAT s_imag[block_sz];
-	__shared__ XFLOAT s_corr[block_sz];
+	XFLOAT * s_real = &buffer[(9 + ((block_sz/prefetch_fraction) << 1)) * eulers_per_block];//[block_sz]; //max = 128 * 8 * 4 = 4 KB
+	XFLOAT * s_imag = &buffer[(9 + ((block_sz/prefetch_fraction) << 1)) * eulers_per_block + block_sz];//[block_sz]; //max = 128 * 8 * 4 = 4 KB
+	XFLOAT * s_corr = &buffer[(9 + ((block_sz/prefetch_fraction) << 1)) * eulers_per_block + (block_sz << 1)];//[block_sz]; //max = 128 * 8 * 4 = 4 KB
 
+	//total max = 32 + 12 + 1 = 45 KB, and shared memory per block = 48 KB !!!???
+
+	//use too much shared memory, only 3kb left, but we need MAX = 2048 * 8 * 4 = 64 KB !!!????
+	//__shared__ XFLOAT s_diff2s[block_sz * eulers_per_block];
+	// so I am going to reuse the shared memory.
+	//we can pre caclulate this space we need, if it is more than 48 KB, we use the old method.
+	int _48KB = (1 << 10) * 48;
+	int _diff_sz = (translation_num * eulers_per_block) * sizeof(XFLOAT);
+	XFLOAT * s_diff2s = &buffer[0];//size = translation_num * eulers_per_block; // max size = 130 * 64 * 4 = 32 KB in this case....
 	XFLOAT diff2s[eulers_per_block] = {0.f};
 
-	XFLOAT tx = trans_x[tid%translation_num];
-	XFLOAT ty = trans_y[tid%translation_num];
-	XFLOAT tz = trans_z[tid%translation_num];
+	XFLOAT tx = __ldg(&trans_x[tid%translation_num]);
+	XFLOAT ty = __ldg(&trans_y[tid%translation_num]);
+	XFLOAT tz = __ldg(&trans_z[tid%translation_num]);
 
 	//Step through data
 	int max_block_pass_pixel( ceilfracf(image_size,block_sz) * block_sz );
@@ -131,9 +143,9 @@ __global__ void cuda_kernel_diff2_coarse(
 		//Prefetch block-wise
 		if (init_pixel % block_sz == 0 && init_pixel + tid < image_size)
 		{
-			s_real[tid] = g_real[init_pixel + tid];
-			s_imag[tid] = g_imag[init_pixel + tid];
-			s_corr[tid] = g_corr[init_pixel + tid] / 2;
+			s_real[tid] = __ldg(&g_real[init_pixel + tid]);
+			s_imag[tid] = __ldg(&g_imag[init_pixel + tid]);
+			s_corr[tid] = __ldg(&g_corr[init_pixel + tid]) / 2;
 		}
 
 		__syncthreads();
@@ -181,10 +193,67 @@ __global__ void cuda_kernel_diff2_coarse(
 		}
 	}
 
+	//__syncthreads();
+
+//#define S_DIFF2S s_ref_real
+	//Map
+	//#pragma unroll
+	//for (int j = 0; j < eulers_per_block; j ++)
+	//	S_DIFF2S[tid * eulers_per_block + j] = diff2s[j];
+
+	//__syncthreads();
+
+	//Reduce1
+	//FIXME
+	//for(int j=(block_sz/2); j>0; j/=2)
+	//{
+	//	if(tid<j)
+	//	{
+	//		#pragma unroll
+	//		for (int i=0; i<eulers_per_block; i++)
+	//		{
+	//			s_diff2s[eulers_per_block * tid + i] += s_diff2s[eulers_per_block * (tid + j) + i];
+	//		}
+	//	}
+	//	__syncthreads();
+	//}
+
 	//Set global
-	#pragma unroll
-	for (int i = 0; i < eulers_per_block; i ++)
-		cuda_atomic_add(&g_diff2s[(blockIdx.x * eulers_per_block + i) * translation_num + tid % translation_num], diff2s[i]);
+	int _offset = tid % translation_num;
+
+	if(_diff_sz >= _48KB)
+	{
+		#pragma unroll
+		for (int i = 0; i < eulers_per_block; i ++)
+			cuda_atomic_add(&g_diff2s[(blockIdx.x * eulers_per_block + i) * translation_num + _offset], diff2s[i]);
+	}
+	else
+	{
+		if(tid < translation_num)
+		{
+			#pragma unroll
+			for (int i = 0; i < eulers_per_block; i ++)
+				s_diff2s[i + eulers_per_block * tid] = diff2s[i];
+		}
+
+		__syncthreads();
+
+		if(tid >= translation_num)
+		{
+			#pragma unroll
+			for (int i = 0; i < eulers_per_block; i ++)
+				cuda_atomic_add(&s_diff2s[i + eulers_per_block * _offset], diff2s[i]);
+		}
+		__syncthreads();
+
+		if(tid < translation_num)
+		{
+			#pragma unroll
+			for (int i = 0; i < eulers_per_block; i ++)
+				g_diff2s[(blockIdx.x * eulers_per_block + i) * translation_num + tid] += s_diff2s[eulers_per_block * tid + i];
+		}
+	}
+//#undef S_DIFF2S
 }
 
 

@@ -929,7 +929,7 @@ void getAllSquaredDifferencesCoarse(
 		CTIC(cudaMLO->timer,"translation_1");
 
 		long unsigned translation_num((sp.itrans_max - sp.itrans_min + 1) * sp.nr_oversampled_trans);
-
+		//printf(" =================== Translation Number: %d\n", translation_num);
 		CudaGlobalPtr<XFLOAT> trans_x(translation_num, cudaMLO->devBundle->allocator);
 		CudaGlobalPtr<XFLOAT> trans_y(translation_num, cudaMLO->devBundle->allocator);
 		CudaGlobalPtr<XFLOAT> trans_z(translation_num, cudaMLO->devBundle->allocator);

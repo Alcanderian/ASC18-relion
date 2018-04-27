@@ -41,7 +41,7 @@ __global__ void cuda_kernel_backproject2D(
 	unsigned tid = threadIdx.x;
 	unsigned img = blockIdx.x;
 
-	__shared__ XFLOAT s_eulers[4];
+	XFLOAT eulers[4];
 
 	extern __shared__ XFLOAT buffer[];
 	XFLOAT * s_weights	= &buffer[0];
@@ -51,14 +51,10 @@ __global__ void cuda_kernel_backproject2D(
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
 	// opt by ljx 2018.3.7, make less if-branch
-	if (tid == 0)
-		s_eulers[0] = g_eulers[img*9+0] * padding_factor;
-	else if (tid == 1)
-		s_eulers[1] = g_eulers[img*9+1] * padding_factor;
-	else if (tid == 2)
-		s_eulers[2] = g_eulers[img*9+3] * padding_factor;
-	else if (tid == 3)
-		s_eulers[3] = g_eulers[img*9+4] * padding_factor;
+	eulers[0] = __ldg(&g_eulers[img*9+0]) * padding_factor;
+	eulers[1] = __ldg(&g_eulers[img*9+1]) * padding_factor;
+	eulers[2] = __ldg(&g_eulers[img*9+3]) * padding_factor;
+	eulers[3] = __ldg(&g_eulers[img*9+4]) * padding_factor;
 	
 	// fic by ljx 2018.9, it was 0,1,3,4 not 0,1,2,3
 	//if (tid < 4)
@@ -68,8 +64,6 @@ __global__ void cuda_kernel_backproject2D(
 	// end opt
 
 	//opt by ljx prefetch data
-
-	__syncthreads();
 	
 	int tran_pass_num(translation_num / BP_2D_BLOCK_SIZE);
 	int remain_num(translation_num % BP_2D_BLOCK_SIZE);
@@ -78,9 +72,9 @@ __global__ void cuda_kernel_backproject2D(
 	{
 		for (unsigned pass = 0; pass < tran_pass_num; pass++)
 		{
-			s_weights[pass * BP_2D_BLOCK_SIZE + tid]	= g_weights[img * translation_num + pass * BP_2D_BLOCK_SIZE + tid];
-			s_trans_x[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_x[pass * BP_2D_BLOCK_SIZE + tid];
-			s_trans_y[pass * BP_2D_BLOCK_SIZE + tid]	= g_trans_y[pass * BP_2D_BLOCK_SIZE + tid];
+			s_weights[pass * BP_2D_BLOCK_SIZE + tid]	= __ldg(&g_weights[img * translation_num + pass * BP_2D_BLOCK_SIZE + tid]);
+			s_trans_x[pass * BP_2D_BLOCK_SIZE + tid]	= __ldg(&g_trans_x[pass * BP_2D_BLOCK_SIZE + tid]);
+			s_trans_y[pass * BP_2D_BLOCK_SIZE + tid]	= __ldg(&g_trans_y[pass * BP_2D_BLOCK_SIZE + tid]);
 		}
 
 		__syncthreads();
@@ -88,9 +82,9 @@ __global__ void cuda_kernel_backproject2D(
 	
 	if (tid < remain_num)
 	{
-		s_weights[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= g_weights[img * translation_num + tran_pass_num * BP_2D_BLOCK_SIZE + tid];
-		s_trans_x[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= g_trans_x[tran_pass_num * BP_2D_BLOCK_SIZE + tid];
-		s_trans_y[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= g_trans_y[tran_pass_num * BP_2D_BLOCK_SIZE + tid];
+		s_weights[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= __ldg(&g_weights[img * translation_num + tran_pass_num * BP_2D_BLOCK_SIZE + tid]);
+		s_trans_x[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= __ldg(&g_trans_x[tran_pass_num * BP_2D_BLOCK_SIZE + tid]);
+		s_trans_y[tran_pass_num * BP_2D_BLOCK_SIZE + tid]	= __ldg(&g_trans_y[tran_pass_num * BP_2D_BLOCK_SIZE + tid]);
 	}
 
 	__syncthreads();
@@ -151,8 +145,8 @@ __global__ void cuda_kernel_backproject2D(
 		{
 
 			// Get logical coordinates in the 3D map
-			XFLOAT xp = (s_eulers[0] * x + s_eulers[1] * y );
-			XFLOAT yp = (s_eulers[2] * x + s_eulers[3] * y );
+			XFLOAT xp = (eulers[0] * x + eulers[1] * y );
+			XFLOAT yp = (eulers[2] * x + eulers[3] * y );
 
 			// Only asymmetric half is stored
 			if (xp < 0)
@@ -180,6 +174,7 @@ __global__ void cuda_kernel_backproject2D(
 			XFLOAT dd10 =  fy * mfx;
 			XFLOAT dd11 =  fy *  fx;
 
+			// it's nearly impossible to optimize these atomic opertaion.........................
 			cuda_atomic_add(&g_model_real  [y0 * mdl_x + x0], dd00 * real);
 			cuda_atomic_add(&g_model_imag  [y0 * mdl_x + x0], dd00 * imag);
 			cuda_atomic_add(&g_model_weight[y0 * mdl_x + x0], dd00 * Fweight);
@@ -231,7 +226,7 @@ __global__ void cuda_kernel_backproject3D(
 	unsigned tid = threadIdx.x;
 	unsigned img = blockIdx.x;
 
-	__shared__ XFLOAT s_eulers[9];
+	XFLOAT eulers[9];
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
 	int block_sz(0);
@@ -242,15 +237,22 @@ __global__ void cuda_kernel_backproject3D(
 
 	extern __shared__ XFLOAT buffer[];
 	//opt by ljx prefetch data
-	XFLOAT * s_weights			= &buffer[0];
-	XFLOAT * s_trans_x			= &buffer[translation_num];
-	XFLOAT * s_trans_y			= &buffer[2*translation_num];
-	XFLOAT * s_trans_z			= &buffer[3*translation_num];
+	XFLOAT * s_weights			= &buffer[0]; // size = translation_num
+	XFLOAT * s_trans_x			= &buffer[translation_num]; // size = translation_num
+	XFLOAT * s_trans_y			= &buffer[2*translation_num]; // size = translation_num
+	XFLOAT * s_trans_z			= &buffer[3*translation_num]; // size = translation_num
 
-	if (tid < 9)
-		s_eulers[tid] = g_eulers[img*9+tid];
+	eulers[0] = __ldg(&g_eulers[img*9+0]);
+	eulers[1] = __ldg(&g_eulers[img*9+1]);
+	eulers[2] = __ldg(&g_eulers[img*9+2]);
+	
+	eulers[3] = __ldg(&g_eulers[img*9+3]);
+	eulers[4] = __ldg(&g_eulers[img*9+4]);
+	eulers[5] = __ldg(&g_eulers[img*9+5]);
 
-	__syncthreads();
+	eulers[6] = __ldg(&g_eulers[img*9+6]);
+	eulers[7] = __ldg(&g_eulers[img*9+7]);
+	eulers[8] = __ldg(&g_eulers[img*9+8]);
 
 	int tran_pass_num(translation_num / block_sz);
 	int remain_num(translation_num % block_sz);
@@ -260,11 +262,11 @@ __global__ void cuda_kernel_backproject3D(
 
 		for (unsigned pass = 0; pass < tran_pass_num; pass++)
 		{
-			s_weights[pass * block_sz + tid]		= g_weights[img * translation_num + pass * block_sz + tid];
-			s_trans_x[pass * block_sz + tid]		= g_trans_x[pass * block_sz + tid];
-			s_trans_y[pass * block_sz + tid]		= g_trans_y[pass * block_sz + tid];
+			s_weights[pass * block_sz + tid]		= __ldg(&g_weights[img * translation_num + pass * block_sz + tid]);
+			s_trans_x[pass * block_sz + tid]		= __ldg(&g_trans_x[pass * block_sz + tid]);
+			s_trans_y[pass * block_sz + tid]		= __ldg(&g_trans_y[pass * block_sz + tid]);
 			if(DATA3D)
-				s_trans_z[pass * block_sz + tid]	= g_trans_z[pass * block_sz + tid];
+				s_trans_z[pass * block_sz + tid]	= __ldg(&g_trans_z[pass * block_sz + tid]);
 		}
 
 		__syncthreads();
@@ -272,11 +274,11 @@ __global__ void cuda_kernel_backproject3D(
 	
 	if (tid < remain_num)
 	{
-		s_weights[tran_pass_num * block_sz + tid]		= g_weights[img * translation_num + tran_pass_num * block_sz + tid];
-		s_trans_x[tran_pass_num * block_sz + tid]		= g_trans_x[tran_pass_num * block_sz + tid];
-		s_trans_y[tran_pass_num * block_sz + tid]		= g_trans_y[tran_pass_num * block_sz + tid];
+		s_weights[tran_pass_num * block_sz + tid]		= __ldg(&g_weights[img * translation_num + tran_pass_num * block_sz + tid]);
+		s_trans_x[tran_pass_num * block_sz + tid]		= __ldg(&g_trans_x[tran_pass_num * block_sz + tid]);
+		s_trans_y[tran_pass_num * block_sz + tid]		= __ldg(&g_trans_y[tran_pass_num * block_sz + tid]);
 		if(DATA3D)
-			s_trans_z[tran_pass_num * block_sz + tid]	= g_trans_z[tran_pass_num * block_sz + tid];
+			s_trans_z[tran_pass_num * block_sz + tid]	= __ldg(&g_trans_z[tran_pass_num * block_sz + tid]);
 	}
 
 	__syncthreads();
@@ -376,15 +378,15 @@ __global__ void cuda_kernel_backproject3D(
 			XFLOAT xp,yp,zp;
 			if(DATA3D)
 			{
-				xp = (s_eulers[0] * x + s_eulers[1] * y + s_eulers[2] * z) * padding_factor;
-				yp = (s_eulers[3] * x + s_eulers[4] * y + s_eulers[5] * z) * padding_factor;
-				zp = (s_eulers[6] * x + s_eulers[7] * y + s_eulers[8] * z) * padding_factor;
+				xp = (eulers[0] * x + eulers[1] * y + eulers[2] * z) * padding_factor;
+				yp = (eulers[3] * x + eulers[4] * y + eulers[5] * z) * padding_factor;
+				zp = (eulers[6] * x + eulers[7] * y + eulers[8] * z) * padding_factor;
 			}
 			else
 			{
-				xp = (s_eulers[0] * x + s_eulers[1] * y ) * padding_factor;
-				yp = (s_eulers[3] * x + s_eulers[4] * y ) * padding_factor;
-				zp = (s_eulers[6] * x + s_eulers[7] * y ) * padding_factor;
+				xp = (eulers[0] * x + eulers[1] * y ) * padding_factor;
+				yp = (eulers[3] * x + eulers[4] * y ) * padding_factor;
+				zp = (eulers[6] * x + eulers[7] * y ) * padding_factor;
 			}
 			// Only asymmetric half is stored
 			if (xp < (XFLOAT) 0.0)

@@ -43,6 +43,7 @@
 #include "src/macros.h"
 #include "src/error.h"
 #include "src/ml_optimiser.h"
+#include "src/fftw.h"
 #ifdef CUDA
 #include "src/gpu_utils/cuda_ml_optimiser.h"
 #endif
@@ -328,6 +329,8 @@ void MlOptimiser::parseContinue(int argc, char **argv)
 	x_pool = textToInteger(parser.getOption("--pool", "Number of images to pool for each thread task", "1"));
 	nr_threads = textToInteger(parser.getOption("--j", "Number of threads to run in parallel (only useful on multi-core machines)", "1"));
 	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "-1"));
+	fftw_threads = textToInteger(parser.getOption("--fftw_j", "Number of cpu threads to run in FFTWl (only useful on multi-core machines)", "1"));
+	
 	if (sysu_cpu_threads == -1)
 	{
 		sysu_cpu_threads = nr_threads;
@@ -565,7 +568,9 @@ void MlOptimiser::parseInitial(int argc, char **argv)
 	int computation_section = parser.addSection("Computation");
 	x_pool = textToInteger(parser.getOption("--pool", "Number of images to pool for each thread task", "1"));
 	nr_threads = textToInteger(parser.getOption("--j", "Number of threads to run in parallel (only useful on multi-core machines)", "1"));
-	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "-1"));
+	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "1"));
+	fftw_threads = textToInteger(parser.getOption("--fftw_j", "Number of cpu threads to run in FFTWl (only useful on multi-core machines)", "1"));
+	
 	if (sysu_cpu_threads == -1)
 	{
 		sysu_cpu_threads = nr_threads;
@@ -2139,6 +2144,9 @@ void MlOptimiser::iterateSetup()
 	//Setup Sysu Cpu
 	ThreadManager::newInstance(SYSU_CPU_PARALLEL, sysu_cpu_threads);
 	SysuTaskDistributor::newInstance(SYSU_CPU_PARALLEL, sysu_cpu_threads);
+	
+	//Setup FFTW
+	//FftwThreadManager::initFftw(sysu_cpu_threads);
 
 }
 void MlOptimiser::iterateWrapUp()
@@ -2150,6 +2158,7 @@ void MlOptimiser::iterateWrapUp()
 	ThreadManager::freeInstance(SYSU_CPU_PARALLEL);
 	SysuTaskDistributor::freeInstance(GENERAL_PARALLEL);
 	SysuTaskDistributor::freeInstance(SYSU_CPU_PARALLEL);
+	//FftwThreadManager::cleanupFftw();
     delete exp_ipart_ThreadTaskDistributor;
 
     // Delete volatile space on scratch

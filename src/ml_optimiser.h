@@ -510,6 +510,7 @@ public:
 	int x_pool;
 	int nr_threads;
 	int sysu_cpu_threads;
+	int fftw_threads;
 
 	//for catching exceptions in threads
 	RelionError * threadException;

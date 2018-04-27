@@ -5,11 +5,21 @@
 set(FFTW_EXTERNAL_PATH "${CMAKE_SOURCE_DIR}/external/fftw")
 
 if(DoublePrec_CPU)
-   # set fftw lib to use double precision
-	set(libfft "fftw3")
+    # set fftw lib to use double precision
+	if(FFTW_OMP)
+		set(libfft "fftw3_omp")
+		message(STATUS "USE OPENMP FOR FFTW")
+	else(FFTW_OMP)
+		set(libfft "fftw3")
+	endif(FFTW_OMP)
 else(DoublePrec_CPU)
 	# set fftw lib to use single precision
-	set(libfft "fftw3f")
+	if(FFTW_OMP)
+		set(libfft "fftw3f_omp")
+		message(STATUS "USE OPENMP FOR FFTW")
+	else(FFTW_OMP)
+		set(libfft "fftw3f")
+	endif(FFTW_OMP)
 endif(DoublePrec_CPU)	
 
 set(LIB_PATHFFT $ENV{FFTW_LIB})
