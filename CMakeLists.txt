@@ -204,6 +204,7 @@ endif(GUI)
 
 # ------------------------------------------------------------------------------FFTW--
 option(FORCE_OWN_FFTW "FORCE_OWN_FFTW" OFF)
+option(FFTW_OMP "FFTW_OMP" OFF)
 
 if(NOT FORCE_OWN_FFTW)
 	FIND_PACKAGE(FFTW)

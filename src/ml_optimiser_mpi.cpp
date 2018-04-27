@@ -2202,7 +2202,7 @@ void MlOptimiserMpi::maximization()
 						int my_first_recv = node->myRandomSubset();
 
 						//ADD BARRIER, NEED TEST TIME USAGE
-						MPI_Barrier(MPI_COMM_WORLD);
+						//MPI_Barrier(MPI_COMM_WORLD);
 						for (int recv_node = my_first_recv; recv_node < node->size; recv_node += nr_halfsets)
 						{
 							if (node->rank == reconstruct_rank && recv_node != node->rank)

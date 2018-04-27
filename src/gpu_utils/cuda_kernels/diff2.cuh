@@ -44,7 +44,7 @@ __global__ void cuda_kernel_diff2_coarse(
 
 	for (int i = tid; i < max_block_pass_euler; i += block_sz)
 		if (i < eulers_per_block * 9)
-			s_eulers[i] = g_eulers[blockIdx.x * eulers_per_block * 9 + i];
+			s_eulers[i] = __ldg(&g_eulers[blockIdx.x * eulers_per_block * 9 + i]);
 
 
 	//Setup variables, block_sz * eulers_per_block = 2048, 4096, 8192
@@ -62,9 +62,9 @@ __global__ void cuda_kernel_diff2_coarse(
 
 	XFLOAT diff2s[eulers_per_block] = {0.f};
 
-	XFLOAT tx = trans_x[tid%translation_num];
-	XFLOAT ty = trans_y[tid%translation_num];
-	XFLOAT tz = trans_z[tid%translation_num];
+	XFLOAT tx = __ldg(&trans_x[tid%translation_num]);
+	XFLOAT ty = __ldg(&trans_y[tid%translation_num]);
+	XFLOAT tz = __ldg(&trans_z[tid%translation_num]);
 
 	//Step through data
 	int max_block_pass_pixel( ceilfracf(image_size,block_sz) * block_sz );
@@ -137,9 +137,9 @@ __global__ void cuda_kernel_diff2_coarse(
 		//Prefetch block-wise
 		if (init_pixel % block_sz == 0 && init_pixel + tid < image_size)
 		{
-			s_real[tid] = g_real[init_pixel + tid];
-			s_imag[tid] = g_imag[init_pixel + tid];
-			s_corr[tid] = g_corr[init_pixel + tid] / 2;
+			s_real[tid] = __ldg(&g_real[init_pixel + tid]);
+			s_imag[tid] = __ldg(&g_imag[init_pixel + tid]);
+			s_corr[tid] = __ldg(&g_corr[init_pixel + tid]) / 2;
 		}
 
 		__syncthreads();
@@ -187,7 +187,7 @@ __global__ void cuda_kernel_diff2_coarse(
 		}
 	}
 
-	__syncthreads();
+	//__syncthreads();
 
 //#define S_DIFF2S s_ref_real
 	//Map

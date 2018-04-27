@@ -38,21 +38,31 @@ __global__ void cuda_kernel_wavg(
 	extern __shared__ XFLOAT buffer[];
 
 	unsigned pass_num(ceilfracf(image_size,block_sz)),pixel;
-	XFLOAT * s_wdiff2s_parts	= &buffer[0];
-	XFLOAT * s_sumXA			= &buffer[block_sz];
-	XFLOAT * s_sumA2			= &buffer[2*block_sz];
-	XFLOAT * s_eulers          = &buffer[3*block_sz];
+	XFLOAT wdiff2s_parts;
+	XFLOAT sumXA;
+	XFLOAT sumA2;
 
 	//opt by ljx prefetch data
-	XFLOAT * s_weights			= &buffer[3*block_sz+9];
-	XFLOAT * s_trans_x			= &buffer[3*block_sz+9+translation_num];
-	XFLOAT * s_trans_y			= &buffer[3*block_sz+9+2*translation_num];
-	XFLOAT * s_trans_z			= &buffer[3*block_sz+9+3*translation_num];
+	XFLOAT * s_weights			= &buffer[0];                  // max = 21(?) * 4 = 21 B
+	XFLOAT * s_trans_x			= &buffer[translation_num];  // max = 21(?) * 4 = 21 B 
+	XFLOAT * s_trans_y			= &buffer[2*translation_num];// max = 21(?) * 4 = 21 B 
+	XFLOAT * s_trans_z			= &buffer[3*translation_num];// max = 21(?) * 4 = 21 B  
 
-	if (tid < 9)
-		s_eulers[tid] = g_eulers[bid*9+tid];
+	// now max <= 13KB, 48 - 1 = 47 KB left.
 
-	__syncthreads();
+	XFLOAT eulers[9];
+
+	eulers[0] = g_eulers[bid*9+0];
+	eulers[1] = g_eulers[bid*9+1];
+	eulers[2] = g_eulers[bid*9+2];
+
+	eulers[3] = g_eulers[bid*9+3];
+	eulers[4] = g_eulers[bid*9+4];
+	eulers[5] = g_eulers[bid*9+5];
+
+	eulers[6] = g_eulers[bid*9+6];
+	eulers[7] = g_eulers[bid*9+7];
+	eulers[8] = g_eulers[bid*9+8];
 
 	int tran_pass_num(translation_num / block_sz);
 	int remain_num(translation_num % block_sz);
@@ -62,11 +72,11 @@ __global__ void cuda_kernel_wavg(
 
 		for (unsigned pass = 0; pass < tran_pass_num; pass++)
 		{
-			s_weights[pass * block_sz + tid]		= g_weights[bid * translation_num + pass * block_sz + tid];
-			s_trans_x[pass * block_sz + tid]		= g_trans_x[pass * block_sz + tid];
-			s_trans_y[pass * block_sz + tid]		= g_trans_y[pass * block_sz + tid];
+			s_weights[pass * block_sz + tid]		= __ldg(&g_weights[bid * translation_num + pass * block_sz + tid]);
+			s_trans_x[pass * block_sz + tid]		= __ldg(&g_trans_x[pass * block_sz + tid]);
+			s_trans_y[pass * block_sz + tid]		= __ldg(&g_trans_y[pass * block_sz + tid]);
 			if(DATA3D)
-				s_trans_z[pass * block_sz + tid]	= g_trans_z[pass * block_sz + tid];
+				s_trans_z[pass * block_sz + tid]	= __ldg(&g_trans_z[pass * block_sz + tid]);
 		}
 
 		__syncthreads();
@@ -74,19 +84,23 @@ __global__ void cuda_kernel_wavg(
 
 	if (tid < remain_num)
 	{
-		s_weights[tran_pass_num * block_sz + tid]		= g_weights[bid * translation_num + tran_pass_num * block_sz + tid];
-		s_trans_x[tran_pass_num * block_sz + tid]		= g_trans_x[tran_pass_num * block_sz + tid];
-		s_trans_y[tran_pass_num * block_sz + tid]		= g_trans_y[tran_pass_num * block_sz + tid];
+		s_weights[tran_pass_num * block_sz + tid]		= __ldg(&g_weights[bid * translation_num + tran_pass_num * block_sz + tid]);
+		s_trans_x[tran_pass_num * block_sz + tid]		= __ldg(&g_trans_x[tran_pass_num * block_sz + tid]);
+		s_trans_y[tran_pass_num * block_sz + tid]		= __ldg(&g_trans_y[tran_pass_num * block_sz + tid]);
 		if(DATA3D)
-			s_trans_z[tran_pass_num * block_sz + tid]	= g_trans_z[tran_pass_num * block_sz + tid];
+			s_trans_z[tran_pass_num * block_sz + tid]	= __ldg(&g_trans_z[tran_pass_num * block_sz + tid]);
 	}
 	__syncthreads();
 
+	//XFLOAT sum[pass_num] = {0.0f};
+
+	// pass_num may very large(bigger than 128 in Refine's last iteration, no bigger than 32 in 3D and 64 in 2D), 
+	// it means we should use more than 256 * 128 = 32K register per block(with this dataset).......holy shit
 	for (unsigned pass = 0; pass < pass_num; pass++) // finish a reference proj in each block
 	{
-		s_wdiff2s_parts[tid] = 0.0f;
-		s_sumXA[tid] = 0.0f;
-		s_sumA2[tid] = 0.0f;
+		wdiff2s_parts = 0.0f;
+		sumXA = 0.0f;
+		sumA2 = 0.0f;
 
 		pixel = pass * block_sz + tid;
 
@@ -123,22 +137,22 @@ __global__ void cuda_kernel_wavg(
 		if(DATA3D)
 			projector.project3Dmodel(
 				x,y,z,
-				s_eulers[0], s_eulers[1], s_eulers[2],
-				s_eulers[3], s_eulers[4], s_eulers[5],
-				s_eulers[6], s_eulers[7], s_eulers[8],
+				eulers[0], eulers[1], eulers[2],
+				eulers[3], eulers[4], eulers[5],
+				eulers[6], eulers[7], eulers[8],
 				ref_real, ref_imag);
 		else if(REF3D)
 			projector.project3Dmodel(
 				x,y,
-				s_eulers[0], s_eulers[1],
-				s_eulers[3], s_eulers[4],
-				s_eulers[6], s_eulers[7],
+				eulers[0], eulers[1],
+				eulers[3], eulers[4],
+				eulers[6], eulers[7],
 				ref_real, ref_imag);
 		else
 			projector.project2Dmodel(
 					x,y,
-				s_eulers[0], s_eulers[1],
-				s_eulers[3], s_eulers[4],
+				eulers[0], eulers[1],
+				eulers[3], eulers[4],
 				ref_real, ref_imag);
 
 		if (REFCTF)
@@ -171,16 +185,16 @@ __global__ void cuda_kernel_wavg(
 				XFLOAT diff_real = ref_real - trans_real;
 				XFLOAT diff_imag = ref_imag - trans_imag;
 
-				s_wdiff2s_parts[tid] += weight * (diff_real*diff_real + diff_imag*diff_imag);
+				wdiff2s_parts += weight * (diff_real*diff_real + diff_imag*diff_imag);
 
-				s_sumXA[tid] +=  weight * ( ref_real * trans_real + ref_imag * trans_imag);
-				s_sumA2[tid] +=  weight * ( ref_real*ref_real  +  ref_imag*ref_imag );
+				sumXA +=  weight * ( ref_real * trans_real + ref_imag * trans_imag);
+				sumA2 +=  weight * ( ref_real*ref_real  +  ref_imag*ref_imag );
 			}
 		}
 
-		cuda_atomic_add(&g_wdiff2s_XA[pixel], s_sumXA[tid]);
-		cuda_atomic_add(&g_wdiff2s_AA[pixel], s_sumA2[tid]);
-		cuda_atomic_add(&g_wdiff2s_parts[pixel], s_wdiff2s_parts[tid]);
+		cuda_atomic_add(&g_wdiff2s_XA[pixel], sumXA);
+		cuda_atomic_add(&g_wdiff2s_AA[pixel], sumA2);
+		cuda_atomic_add(&g_wdiff2s_parts[pixel], wdiff2s_parts);
 	}
 }
 

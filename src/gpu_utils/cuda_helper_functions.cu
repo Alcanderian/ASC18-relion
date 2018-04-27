@@ -303,6 +303,7 @@ void runWavgKernel(
 
 	//cudaFuncSetCacheConfig(cuda_kernel_wavg_fast, cudaFuncCachePreferShared);
 
+	//printf("PASSNUM: %d\n", (int)XMIPP_MAX((image_size / WAVG_BLOCK_SIZE) + 1, (image_size / WAVG_BLOCK_SIZE_DATA3D) + 1));
 	if (refs_are_ctf_corrected)
 	{
 		if(data_is_3D)
