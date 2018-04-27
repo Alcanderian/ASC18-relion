@@ -110,6 +110,74 @@
 #define FFTW2D_ELEM(V, ip, jp) \
     (DIRECT_A2D_ELEM((V), ((ip < 0) ? (ip + YSIZE(V)) : (ip)), (jp)))
 
+class FftwThreadManager
+{
+private:
+    FftwThreadManager(int nr_threads)
+    {
+#ifdef FFTW_OMP
+	int a = fftw_init_threads();
+	if(a!=0)
+	{
+		printf(" Succeed FFTW with %d threads\n", nr_threads);
+		fftw_plan_with_nthreads(nr_threads);
+		this->nr_threads = nr_threads;
+	}
+	else
+	{
+		printf(" Failed FFTW with threads\n");
+		this->nr_threads = 1;
+	}
+#else
+	printf(" Using FFTW with single thread\n");
+	this->nr_threads = 1;
+#endif
+    }
+
+    
+public:
+    static FftwThreadManager * instance;
+	
+    static void initFftw(int nr_threads)
+    {
+		if (instance == NULL)
+		{
+			instance = new FftwThreadManager(nr_threads);
+		}
+    }
+	
+	static void reconfFftw(int nr_threads)
+	{
+		
+		if (instance != NULL)
+		{
+#ifdef FFTW_OMP
+			fftw_plan_with_nthreads(nr_threads);
+			printf(" Reconfigure FFTW with %d threads\n", nr_threads);
+			instance->nr_threads = nr_threads;
+#endif
+		}
+	}
+
+    static void cleanupFftw()
+    {
+		if (instance != NULL)
+		{
+			delete instance;
+            instance = NULL;
+		}
+    }
+
+	int nr_threads;
+	
+    ~FftwThreadManager()
+    {
+#ifdef FFTW_OMP
+		fftw_cleanup_threads();
+#endif
+    }
+};
+
 /** Fourier Transformer class.
  * @ingroup FourierW
  *

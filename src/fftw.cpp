@@ -106,10 +106,14 @@ void FourierTransformer::cleanup()
     clear();
     // Then clean up all the junk fftw keeps lying around
     // SOMEHOW THE FOLLOWING IS NOT ALLOWED WHEN USING MULTPLE TRANSFORMER OBJECTS....
+#ifndef FFTW_OMP
+	//do notthing
 #ifdef RELION_SINGLE_PRECISION
     fftwf_cleanup();
 #else
     fftw_cleanup();
+#endif
+
 #endif
 
 #ifdef DEBUG_PLANS
@@ -1428,3 +1432,6 @@ void helicalLayerLineProfile(const MultidimArray<RFLOAT > &v, std::string title,
 	plot2D->AddDataSet(dataSetAmpr);
 	plot2D->OutputPostScriptPlot(fn_eps);
 }
+
+
+FftwThreadManager * FftwThreadManager::instance = NULL;

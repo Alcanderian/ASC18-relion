@@ -1902,6 +1902,8 @@ void MlOptimiserMpi::maximization()
 	helical_twist_half1 = helical_twist_half2 = helical_twist_initial;
 	helical_rise_half1 = helical_rise_half2 = helical_rise_initial;
 
+	FftwThreadManager::cleanupFftw();
+	FftwThreadManager::initFftw(fftw_threads);
 	// First reconstruct all classes in parallel
 	for (int ibody = 0; ibody < mymodel.nr_bodies; ibody++)
 	{
@@ -2169,7 +2171,9 @@ void MlOptimiserMpi::maximization()
 #endif
 		} // end for iclass
 	} // end for ibody
-
+	
+	FftwThreadManager::cleanupFftw();
+	FftwThreadManager::initFftw(1);
 #ifdef DEBUG
 	std::cerr << "rank= "<<node->rank<<" has reached barrier of reconstruction" << std::endl;
 #endif
