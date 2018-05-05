@@ -21,6 +21,7 @@
 #include "src/ml_optimiser.h"
 #ifdef CUDA
 #include "src/gpu_utils/cuda_ml_optimiser.h"
+#include "src/gpu_utils/sysu_cuda_bundle.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -452,6 +453,15 @@ will still yield good performance and possibly a more stable execution. \n" << s
 		}
 	}
 	/************************************************************************/
+
+//=============================  SYSU ==============================
+	if(do_gpu)
+	{
+		if (node->rank <= rank_on_each_host) // we should add one because the master
+			SysuCudaBundle::newInstance(node->rank, rank_on_each_host + 1)->setupMemory();
+		else
+			SysuCudaBundle::newInstance(node->rank, rank_on_each_host)->setupMemory();
+	}
 #endif // CUDA
 
 
@@ -551,6 +561,13 @@ will still yield good performance and possibly a more stable execution. \n" << s
 		}
 	}
 
+#ifdef CUDA
+//=============================  SYSU ==============================
+	if(do_gpu)
+	{
+		SysuCudaBundle::freeInstance();
+	}
+#endif
 
 #ifdef DEBUG
     std::cerr<<"MlOptimiserMpi::initialise Done"<<std::endl;

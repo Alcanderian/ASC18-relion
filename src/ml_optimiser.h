@@ -512,6 +512,8 @@ public:
 	int sysu_cpu_threads;
 	int fftw_threads;
 
+	int rank_on_each_host;
+
 	//for catching exceptions in threads
 	RelionError * threadException;
 

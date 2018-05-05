@@ -41,7 +41,7 @@ __global__ void cuda_kernel_backproject2D(
 	unsigned tid = threadIdx.x;
 	unsigned img = blockIdx.x;
 
-	XFLOAT eulers[4];
+	XFLOAT e0, e1, e2, e3;
 
 	extern __shared__ XFLOAT buffer[];
 	XFLOAT * s_weights	= &buffer[0];
@@ -51,10 +51,10 @@ __global__ void cuda_kernel_backproject2D(
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
 	// opt by ljx 2018.3.7, make less if-branch
-	eulers[0] = __ldg(&g_eulers[img*9+0]) * padding_factor;
-	eulers[1] = __ldg(&g_eulers[img*9+1]) * padding_factor;
-	eulers[2] = __ldg(&g_eulers[img*9+3]) * padding_factor;
-	eulers[3] = __ldg(&g_eulers[img*9+4]) * padding_factor;
+	e0 = __ldg(&g_eulers[img*9+0]) * padding_factor;
+	e1 = __ldg(&g_eulers[img*9+1]) * padding_factor;
+	e2 = __ldg(&g_eulers[img*9+3]) * padding_factor;
+	e3 = __ldg(&g_eulers[img*9+4]) * padding_factor;
 	
 	// fic by ljx 2018.9, it was 0,1,3,4 not 0,1,2,3
 	//if (tid < 4)
@@ -145,8 +145,8 @@ __global__ void cuda_kernel_backproject2D(
 		{
 
 			// Get logical coordinates in the 3D map
-			XFLOAT xp = (eulers[0] * x + eulers[1] * y );
-			XFLOAT yp = (eulers[2] * x + eulers[3] * y );
+			XFLOAT xp = (e0 * x + e1 * y );
+			XFLOAT yp = (e2 * x + e3 * y );
 
 			// Only asymmetric half is stored
 			if (xp < 0)
@@ -226,7 +226,7 @@ __global__ void cuda_kernel_backproject3D(
 	unsigned tid = threadIdx.x;
 	unsigned img = blockIdx.x;
 
-	XFLOAT eulers[9];
+	XFLOAT e0, e1, e2, e3, e4 ,e5, e6, e7, e8;
 	XFLOAT minvsigma2, ctf, img_real, img_imag, Fweight, real, imag, weight;
 
 	int block_sz(0);
@@ -242,17 +242,17 @@ __global__ void cuda_kernel_backproject3D(
 	XFLOAT * s_trans_y			= &buffer[2*translation_num]; // size = translation_num
 	XFLOAT * s_trans_z			= &buffer[3*translation_num]; // size = translation_num
 
-	eulers[0] = __ldg(&g_eulers[img*9+0]);
-	eulers[1] = __ldg(&g_eulers[img*9+1]);
-	eulers[2] = __ldg(&g_eulers[img*9+2]);
+	e0 = __ldg(&g_eulers[img*9+0]);
+	e1 = __ldg(&g_eulers[img*9+1]);
+	e2 = __ldg(&g_eulers[img*9+2]);
 	
-	eulers[3] = __ldg(&g_eulers[img*9+3]);
-	eulers[4] = __ldg(&g_eulers[img*9+4]);
-	eulers[5] = __ldg(&g_eulers[img*9+5]);
+	e3 = __ldg(&g_eulers[img*9+3]);
+	e4 = __ldg(&g_eulers[img*9+4]);
+	e5 = __ldg(&g_eulers[img*9+5]);
 
-	eulers[6] = __ldg(&g_eulers[img*9+6]);
-	eulers[7] = __ldg(&g_eulers[img*9+7]);
-	eulers[8] = __ldg(&g_eulers[img*9+8]);
+	e6 = __ldg(&g_eulers[img*9+6]);
+	e7 = __ldg(&g_eulers[img*9+7]);
+	e8 = __ldg(&g_eulers[img*9+8]);
 
 	int tran_pass_num(translation_num / block_sz);
 	int remain_num(translation_num % block_sz);
@@ -378,15 +378,15 @@ __global__ void cuda_kernel_backproject3D(
 			XFLOAT xp,yp,zp;
 			if(DATA3D)
 			{
-				xp = (eulers[0] * x + eulers[1] * y + eulers[2] * z) * padding_factor;
-				yp = (eulers[3] * x + eulers[4] * y + eulers[5] * z) * padding_factor;
-				zp = (eulers[6] * x + eulers[7] * y + eulers[8] * z) * padding_factor;
+				xp = (e0 * x + e1 * y + e2 * z) * padding_factor;
+				yp = (e3 * x + e4 * y + e5 * z) * padding_factor;
+				zp = (e6 * x + e7 * y + e8 * z) * padding_factor;
 			}
 			else
 			{
-				xp = (eulers[0] * x + eulers[1] * y ) * padding_factor;
-				yp = (eulers[3] * x + eulers[4] * y ) * padding_factor;
-				zp = (eulers[6] * x + eulers[7] * y ) * padding_factor;
+				xp = (e0 * x + e1 * y ) * padding_factor;
+				yp = (e3 * x + e4 * y ) * padding_factor;
+				zp = (e6 * x + e7 * y ) * padding_factor;
 			}
 			// Only asymmetric half is stored
 			if (xp < (XFLOAT) 0.0)
