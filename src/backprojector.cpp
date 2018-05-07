@@ -1504,284 +1504,141 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 {
 	SysuTaskDistributor * sysu_distributor = SysuTaskDistributor::getInstance(SYSU_CPU_PARALLEL);
 	
-	//===============================================================================
-	RFLOAT x, y, z, xp, yp, zp, r2, r2yz;
-	int x0, y0, z0;
-
-	RFLOAT d000r, d001r, d010r, d011r, d100r, d101r, d110r, d111r;
-	RFLOAT dx00r, dx01r, dx10r, dx11r, dxy0r, dxy1r;
-	RFLOAT d000i, d001i, d010i, d011i, d100i, d101i, d110i, d111i;
-	RFLOAT dx00i, dx01i, dx10i, dx11i, dxy0i, dxy1i;
-
-	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
-	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
-
-	RFLOAT *fxs, *fys, *fzs;
-	RFLOAT *fxs1m, *fys1m, *fzs1m;
-	RFLOAT *conj_factors;
-
-	RFLOAT *arr_plus_3d_r;
-	RFLOAT *arr_plus_3d_cri;
-
-	RFLOAT *all_pone;
-	RFLOAT *all_none;
-
-	RFLOAT *d000rs, *d001rs, *d010rs, *d011rs, *d100rs, *d101rs, *d110rs, *d111rs;
-	RFLOAT *d000is, *d001is, *d010is, *d011is, *d100is, *d101is, *d110is, *d111is;
-	RFLOAT *dd000s, *dd001s, *dd010s, *dd011s, *dd100s, *dd101s, *dd110s, *dd111s;
-	
-	//read Arguments===========================================================/
-	
+	//read Arguments===========================================================
 	//read-only part
-	int &start = sysu_distributor->pgsArg->start[thread_id];
-	int &end =  sysu_distributor->pgsArg->end[thread_id];
-	int &rmax2 = sysu_distributor->pgsArg->rmax2;
+	int start = sysu_distributor->pgsArg->start[thread_id];
+	int end =  sysu_distributor->pgsArg->end[thread_id];
+	int rmax2 = sysu_distributor->pgsArg->rmax2;
 	Matrix2D<RFLOAT> &R = sysu_distributor->pgsArg->R;
 	MultidimArray<RFLOAT> &sum_weight = sysu_distributor->pgsArg->sum_weight;
 	MultidimArray<Complex > &sum_data = sysu_distributor->pgsArg->sum_data;
-	
 	//write part
 	MultidimArray<RFLOAT> &weight = *(sysu_distributor->pgsArg->weight);
 	MultidimArray<Complex > &data = *(sysu_distributor->pgsArg->data);
-	
-	//shared memory part
-	fxs             = sysu_distributor->pgsArg->fxs             + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	fys             = sysu_distributor->pgsArg->fys             + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	fzs             = sysu_distributor->pgsArg->fzs             + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	fxs1m           = sysu_distributor->pgsArg->fxs1m           + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	fys1m           = sysu_distributor->pgsArg->fys1m           + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	fzs1m           = sysu_distributor->pgsArg->fzs1m           + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	conj_factors    = sysu_distributor->pgsArg->conj_factors    + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	
-	all_pone        = sysu_distributor->pgsArg->all_pone        + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	all_none        = sysu_distributor->pgsArg->all_none        + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	arr_plus_3d_cri = sysu_distributor->pgsArg->arr_plus_3d_cri + sysu_distributor->pgsArg->coor_arr_sz * thread_id * 2; 
-	arr_plus_3d_r   = sysu_distributor->pgsArg->arr_plus_3d_r   + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	
-	d000rs = sysu_distributor->pgsArg->d000rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d001rs = sysu_distributor->pgsArg->d001rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d010rs = sysu_distributor->pgsArg->d010rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d011rs = sysu_distributor->pgsArg->d011rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d100rs = sysu_distributor->pgsArg->d100rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d101rs = sysu_distributor->pgsArg->d101rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d110rs = sysu_distributor->pgsArg->d110rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d111rs = sysu_distributor->pgsArg->d111rs + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	
-	d000is = sysu_distributor->pgsArg->d000is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d001is = sysu_distributor->pgsArg->d001is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d010is = sysu_distributor->pgsArg->d010is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d011is = sysu_distributor->pgsArg->d011is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d100is = sysu_distributor->pgsArg->d100is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d101is = sysu_distributor->pgsArg->d101is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d110is = sysu_distributor->pgsArg->d110is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	d111is = sysu_distributor->pgsArg->d111is + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	
-	dd000s = sysu_distributor->pgsArg->dd000s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	dd001s = sysu_distributor->pgsArg->dd001s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	dd010s = sysu_distributor->pgsArg->dd010s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	dd011s = sysu_distributor->pgsArg->dd011s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	dd100s = sysu_distributor->pgsArg->dd100s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	dd101s = sysu_distributor->pgsArg->dd101s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	dd110s = sysu_distributor->pgsArg->dd110s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	dd111s = sysu_distributor->pgsArg->dd111s + sysu_distributor->pgsArg->coor_arr_sz * thread_id; 
-	
 	//==========================================================================
 	
+	
+	RFLOAT x, y, z, fx, fy, fz, xp, yp, zp, r2;
+	bool is_neg_x;
+	int x0, x1, y0, y1, z0, z1;
+	Complex d000, d001, d010, d011, d100, d101, d110, d111;
+	Complex dx00, dx01, dx10, dx11, dxy0, dxy1;
+	RFLOAT dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111;
+	RFLOAT ddx00, ddx01, ddx10, ddx11, ddxy0, ddxy1;
+
 	//printf("Thread %d work with [%d, %d]\n", thread_id, start, end);
 	//usleep(10000 + thread_id * 1000);
-
-	// Loop over all other symmetry operators
-	int xsz = XSIZE(data), yxsz = YXSIZE(data);
-
-	Complex *_datap = data.data;
-	RFLOAT *_weightp = weight.data;
 	
 	// Loop over all points in the output (i.e. rotated, or summed) array
 	for (long int k=start; k<=end; k++)
 	{
-		z = (RFLOAT)k;
-		RFLOAT zr0 = z * R(0, 2);
-		RFLOAT zr1 = z * R(1, 2);
-		RFLOAT zr2 = z * R(2, 2);
-
+		//printf("Thread %d in k=%d", thread_id, k);
+		//usleep(10000 + thread_id * 1000);
 		for (long int i=STARTINGY(sum_weight); i<=FINISHINGY(sum_weight); i++)
 		{
-			y = (RFLOAT)i;
-
-			RFLOAT yr0 = y * R(0, 1);
-			RFLOAT yr1 = y * R(1, 1);
-			RFLOAT yr2 = y * R(2, 1);
-
-			r2yz = y*y + z*z;
-			RFLOAT dist2 = rmax2 - r2yz;
-			if(dist2 < 0)
-				continue;
-
-			int arr_it = -1;
-			int j_st = STARTINGX(sum_weight), j_ed = FINISHINGX(sum_weight);
-			int j_act_st = j_st - 1;
-			int j_act_ed = j_st - 2;
-
+			//printf("Thread %d in i=%d, k=%d", thread_id, i, k);
+			//usleep(10000 + thread_id * 1000);
 			for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
-			{
-				x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
-				r2 = x*x + r2yz;
-
-				if(dist2 < x * x)
-					continue;
-
-				if(j_act_st == j_st - 1)
-					j_act_st = j;
-				j_act_ed = j;
-
-				arr_it = j - j_st;
-				if (x * R(0, 0) + yr0 + zr0 < 0)
-					conj_factors[arr_it] = -1.0;
+	        {
+				//printf("Thread %d in j=%d, i=%d, k=%d", thread_id, j, i, k);
+				//usleep(10000 + thread_id * 1000);
+	        	x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
+	        	y = (RFLOAT)i;
+	        	z = (RFLOAT)k;
+				//printf("Thread %d in part PreA", thread_id);
+				//usleep(10000 + thread_id * 1000);
+	        	r2 = x*x + y*y + z*z;
+				//modify by zjw 2018.3.10 break unuse loop
+	        	if (r2 > rmax2) break;
+				//printf("Thread %d in part A", thread_id);
+				//usleep(10000 + thread_id * 1000);
+	        	// coords_output(x,y) = A * coords_input (xp,yp)
+				xp = x * R(0, 0) + y * R(0, 1) + z * R(0, 2);
+				yp = x * R(1, 0) + y * R(1, 1) + z * R(1, 2);
+				zp = x * R(2, 0) + y * R(2, 1) + z * R(2, 2);
+				//printf("Thread %d in part B", thread_id);
+				//usleep(10000 + thread_id * 1000);
+				// Only asymmetric half is stored
+				if (xp < 0)
+				{
+					// Get complex conjugated hermitian symmetry pair
+					xp = -xp;
+					yp = -yp;
+					zp = -zp;
+					is_neg_x = true;
+				}
 				else
-					conj_factors[arr_it] = 1.0;
-			}
+				{
+					is_neg_x = false;
+				}
 
+				// Trilinear interpolation (with physical coords)
+				// Subtract STARTINGY and STARTINGZ to accelerate access to data (STARTINGX=0)
+				// In that way use DIRECT_A3D_ELEM, rather than A3D_ELEM
+	    		x0 = FLOOR(xp);
+				fx = xp - x0;
+				x1 = x0 + 1;
 
-#pragma ivdep
-			// for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
-			for (long int j=j_act_st; j<=j_act_ed; j++)
-			{
-				arr_it = j - j_st;
-
-				x = (RFLOAT)j; // STARTINGX(sum_weight) is zero!
-				r2 = x*x + r2yz;
-
-				xp = x * R(0, 0) + yr0 + zr0;
-				yp = x * R(1, 0) + yr1 + zr1;
-				zp = x * R(2, 0) + yr2 + zr2;
-
-				xp *= conj_factors[arr_it];
-				yp *= conj_factors[arr_it];
-				zp *= conj_factors[arr_it];
-
-				x0 = xp;
 				y0 = FLOOR(yp);
+				fy = yp - y0;
+				y0 -=  STARTINGY(data);
+				y1 = y0 + 1;
+
 				z0 = FLOOR(zp);
-
-				fxs[arr_it] = xp - x0;
-				fys[arr_it] = yp - y0;
-				fzs[arr_it] = zp - z0;
-
-				y0 -= STARTINGY(data);
+				fz = zp - z0;
 				z0 -= STARTINGZ(data);
+				z1 = z0 + 1;
+				//printf("Thread %d in part C", thread_id);
+				//usleep(10000 + thread_id * 1000);
 
-				int em_coord000 = (z0)*yxsz+((y0)*xsz)+(x0);
-				int em_coord001 = em_coord000 + 1;
-				int em_coord010 = em_coord000 + xsz;
-				int em_coord011 = em_coord001 + xsz;
+				// First interpolate (complex) data
+				d000 = DIRECT_A3D_ELEM(data, z0, y0, x0);
+				d001 = DIRECT_A3D_ELEM(data, z0, y0, x1);
+				d010 = DIRECT_A3D_ELEM(data, z0, y1, x0);
+				d011 = DIRECT_A3D_ELEM(data, z0, y1, x1);
+				d100 = DIRECT_A3D_ELEM(data, z1, y0, x0);
+				d101 = DIRECT_A3D_ELEM(data, z1, y0, x1);
+				d110 = DIRECT_A3D_ELEM(data, z1, y1, x0);
+				d111 = DIRECT_A3D_ELEM(data, z1, y1, x1);
 
-				d000rs[arr_it] = _datap[em_coord000].real;
-				d001rs[arr_it] = _datap[em_coord001].real;
-				d010rs[arr_it] = _datap[em_coord010].real;
-				d011rs[arr_it] = _datap[em_coord011].real;
-				d000is[arr_it] = _datap[em_coord000].imag;
-				d001is[arr_it] = _datap[em_coord001].imag;
-				d010is[arr_it] = _datap[em_coord010].imag;
-				d011is[arr_it] = _datap[em_coord011].imag;
-				dd000s[arr_it] = _weightp[em_coord000];
-				dd001s[arr_it] = _weightp[em_coord001];
-				dd010s[arr_it] = _weightp[em_coord010];
-				dd011s[arr_it] = _weightp[em_coord011];
+				dx00 = LIN_INTERP(fx, d000, d001);
+				dx01 = LIN_INTERP(fx, d100, d101);
+				dx10 = LIN_INTERP(fx, d010, d011);
+				dx11 = LIN_INTERP(fx, d110, d111);
+				dxy0 = LIN_INTERP(fy, dx00, dx10);
+				dxy1 = LIN_INTERP(fy, dx01, dx11);
+				//printf("Thread %d in part D", thread_id);
+				//usleep(10000 + thread_id * 1000);
+				// Take complex conjugated for half with negative x
+				if (is_neg_x)
+					A3D_ELEM(sum_data, k, i, j) += conj(LIN_INTERP(fz, dxy0, dxy1));
+				else
+					A3D_ELEM(sum_data, k, i, j) += LIN_INTERP(fz, dxy0, dxy1);
+				//printf("Thread %d in part E", thread_id);
+				//usleep(10000 + thread_id * 1000);
+				// Then interpolate (real) weight
+				dd000 = DIRECT_A3D_ELEM(weight, z0, y0, x0);
+				dd001 = DIRECT_A3D_ELEM(weight, z0, y0, x1);
+				dd010 = DIRECT_A3D_ELEM(weight, z0, y1, x0);
+				dd011 = DIRECT_A3D_ELEM(weight, z0, y1, x1);
+				dd100 = DIRECT_A3D_ELEM(weight, z1, y0, x0);
+				dd101 = DIRECT_A3D_ELEM(weight, z1, y0, x1);
+				dd110 = DIRECT_A3D_ELEM(weight, z1, y1, x0);
+				dd111 = DIRECT_A3D_ELEM(weight, z1, y1, x1);
 
-				fxs1m[arr_it] = 1.0 - fxs[arr_it];
-				fys1m[arr_it] = 1.0 - fys[arr_it];
-				fzs1m[arr_it] = 1.0 - fzs[arr_it];
+				ddx00 = LIN_INTERP(fx, dd000, dd001);
+				ddx01 = LIN_INTERP(fx, dd100, dd101);
+				ddx10 = LIN_INTERP(fx, dd010, dd011);
+				ddx11 = LIN_INTERP(fx, dd110, dd111);
+				ddxy0 = LIN_INTERP(fy, ddx00, ddx10);
+				ddxy1 = LIN_INTERP(fy, ddx01, ddx11);
+				//printf("Thread %d in part F", thread_id);
+				//usleep(10000 + thread_id * 1000);
+				A3D_ELEM(sum_weight, k, i, j) +=  LIN_INTERP(fz, ddxy0, ddxy1);
+				//printf("Thread %d in part G", thread_id);
+				//usleep(10000 + thread_id * 1000);
 
-				int em_coord100 = em_coord000 + yxsz;
-				int em_coord101 = em_coord001 + yxsz;
-				int em_coord110 = em_coord010 + yxsz;
-				int em_coord111 = em_coord011 + yxsz;
-
-				d100rs[arr_it] = _datap[em_coord100].real;
-				d101rs[arr_it] = _datap[em_coord101].real;
-				d110rs[arr_it] = _datap[em_coord110].real;
-				d111rs[arr_it] = _datap[em_coord111].real;
-
-				d100is[arr_it] = _datap[em_coord100].imag;
-				d101is[arr_it] = _datap[em_coord101].imag;
-				d110is[arr_it] = _datap[em_coord110].imag;
-				d111is[arr_it] = _datap[em_coord111].imag;
-
-				dd100s[arr_it] = _weightp[em_coord100];
-				dd101s[arr_it] = _weightp[em_coord101];
-				dd110s[arr_it] = _weightp[em_coord110];
-				dd111s[arr_it] = _weightp[em_coord111];
-			}
-
-			int _iter_3d = (k - STARTINGZ(sum_weight))*yxsz+((i - STARTINGY(sum_weight))*xsz)+(j_st - STARTINGX(sum_weight))
-						   + j_act_st - j_st;
-
-#pragma simd
-			for(int _arr_it = j_act_st - j_st; _arr_it <= j_act_ed - j_st; _arr_it++)
-			{
-				RFLOAT fx = fxs[_arr_it];
-				RFLOAT fy = fys[_arr_it];
-				RFLOAT fz = fzs[_arr_it];
-
-				RFLOAT _fx = fxs1m[_arr_it];
-				RFLOAT _fy = fys1m[_arr_it];
-				RFLOAT _fz = fzs1m[_arr_it];
-
-				d000i = d000is[_arr_it];
-				d001i = d001is[_arr_it];
-				d010i = d010is[_arr_it];
-				d011i = d011is[_arr_it];
-				d100i = d100is[_arr_it];
-				d101i = d101is[_arr_it];
-				d110i = d110is[_arr_it];
-				d111i = d111is[_arr_it];
-				d000r = d000rs[_arr_it];
-				d001r = d001rs[_arr_it];
-				d010r = d010rs[_arr_it];
-				d011r = d011rs[_arr_it];
-				d100r = d100rs[_arr_it];
-				d101r = d101rs[_arr_it];
-				d110r = d110rs[_arr_it];
-				d111r = d111rs[_arr_it];
-
-				dx00i = _fx * d000i + d001i * fx;
-				dx01i = _fx * d100i + d101i * fx;
-				dx10i = _fx * d010i + d011i * fx;
-				dx11i = _fx * d110i + d111i * fx;
-				dxy0i = _fy * dx00i + dx10i * fy;
-				dxy1i = _fy * dx01i + dx11i * fy;
-
-				dx00r = _fx * d000r + d001r * fx;
-				dx01r = _fx * d100r + d101r * fx;
-				dx10r = _fx * d010r + d011r * fx;
-				dx11r = _fx * d110r + d111r * fx;
-				dxy0r = _fy * dx00r + dx10r * fy;
-				dxy1r = _fy * dx01r + dx11r * fy;
-
-				arr_plus_3d_cri[2 * _arr_it] = (_fz * dxy0r + dxy1r * fz);
-				arr_plus_3d_cri[2 * _arr_it + 1] = (_fz * dxy0i + dxy1i * fz) * conj_factors[_arr_it];
-
-				dd000 = dd000s[_arr_it];
-				dd001 = dd001s[_arr_it];
-				dd010 = dd010s[_arr_it];
-				dd011 = dd011s[_arr_it];
-				dd100 = dd100s[_arr_it];
-				dd101 = dd101s[_arr_it];
-				dd110 = dd110s[_arr_it];
-				dd111 = dd111s[_arr_it];
-
-				ddx00 = _fx * dd000 + dd001 * fx;
-				ddx01 = _fx * dd100 + dd101 * fx;
-				ddx10 = _fx * dd010 + dd011 * fx;
-				ddx11 = _fx * dd110 + dd111 * fx;
-				ddxy0 = _fy * ddx00 + ddx10 * fy;
-				ddxy1 = _fy * ddx01 + ddx11 * fy;
-
-				arr_plus_3d_r[_arr_it] = _fz * ddxy0, ddxy1 * fz;
-			} // end loop over all elements of sum_weight
-
-			RFP_ARR_PLUS((RFLOAT*)&sum_data.data[_iter_3d], &arr_plus_3d_cri[j_act_st - j_st], 2 * (j_act_ed - j_act_st + 1));
-			RFP_ARR_PLUS(&sum_weight.data[_iter_3d], &arr_plus_3d_r[j_act_st - j_st], (j_act_ed - j_act_st + 1));
+	        } // end loop over all elements of sum_weight
 		}
 	}
 }
@@ -1794,7 +1651,7 @@ void BackProjector::applyPointGroupSymmetry()
 	std::cerr << " SL.SymsNo()= " << SL.SymsNo() << std::endl;
 	std::cerr << " SL.true_symNo= " << SL.true_symNo << std::endl;
 #endif
-	
+	//printf((SL.SymsNo() > 0 && ref_dim == 3 ? "[Sysu Note]: Enter = TRUE\n" : "[Sysu Note]: Enter = FALSE\n"));
 	if (SL.SymsNo() > 0 && ref_dim == 3)
 	{
 		SysuTaskDistributor *sysu_distributor = SysuTaskDistributor::getInstance(SYSU_CPU_PARALLEL);

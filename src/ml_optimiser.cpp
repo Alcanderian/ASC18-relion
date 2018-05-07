@@ -331,7 +331,7 @@ void MlOptimiser::parseContinue(int argc, char **argv)
 	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "-1"));
 	fftw_threads = textToInteger(parser.getOption("--fftw_j", "Number of cpu threads to run in FFTWl (only useful on multi-core machines)", "1"));
 	rank_on_each_host = textToInteger(parser.getOption("--rank_per_host", "Number of Rank Per Host You Planed.", "1"));
-	
+	printf("[Sysu Note]: FFTW threads %d\n", fftw_threads);
 	if (sysu_cpu_threads == -1)
 	{
 		sysu_cpu_threads = nr_threads;
@@ -572,7 +572,7 @@ void MlOptimiser::parseInitial(int argc, char **argv)
 	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "1"));
 	fftw_threads = textToInteger(parser.getOption("--fftw_j", "Number of cpu threads to run in FFTWl (only useful on multi-core machines)", "1"));
 	rank_on_each_host = textToInteger(parser.getOption("--rank_per_host", "Number of Rank Per Host You Planed.", "1"));
-	
+	printf("[Sysu Note]: FFTW threads %d\n", fftw_threads);
 	if (sysu_cpu_threads == -1)
 	{
 		sysu_cpu_threads = nr_threads;
@@ -3463,6 +3463,7 @@ void MlOptimiser::symmetriseReconstructions()
 
 			if (mymodel.pdf_class[iclass] > 0.)
 			{
+				//printf("[Sysu Note]: Lets Recon +++++++++\n");
 				// Immediately after expectation process. Do rise and twist for all asymmetrical units in Fourier space
 				// Also convert helical rise to pixels for BPref object
 				wsum_model.BPref[ith_recons].symmetrise(mymodel.helical_nr_asu, mymodel.helical_twist[ith_recons], mymodel.helical_rise[ith_recons] / mymodel.pixel_size);

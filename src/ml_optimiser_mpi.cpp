@@ -21,7 +21,6 @@
 #include "src/ml_optimiser.h"
 #ifdef CUDA
 #include "src/gpu_utils/cuda_ml_optimiser.h"
-#include "src/gpu_utils/sysu_cuda_bundle.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -454,14 +453,6 @@ will still yield good performance and possibly a more stable execution. \n" << s
 	}
 	/************************************************************************/
 
-//=============================  SYSU ==============================
-	if(do_gpu)
-	{
-		if (node->rank <= rank_on_each_host) // we should add one because the master
-			SysuCudaBundle::newInstance(node->rank, rank_on_each_host + 1)->setupMemory();
-		else
-			SysuCudaBundle::newInstance(node->rank, rank_on_each_host)->setupMemory();
-	}
 #endif // CUDA
 
 
@@ -562,11 +553,6 @@ will still yield good performance and possibly a more stable execution. \n" << s
 	}
 
 #ifdef CUDA
-//=============================  SYSU ==============================
-	if(do_gpu)
-	{
-		SysuCudaBundle::freeInstance();
-	}
 #endif
 
 #ifdef DEBUG
@@ -2948,6 +2934,7 @@ void MlOptimiserMpi::iterate()
 						std::cout << " Applying helical symmetry from the last iteration in real space..." << std::endl;
 				}
 			}
+			//printf("[Sysu Note]: Ready to Recon ==================\n");
 			symmetriseReconstructions();
 
 			if ( (verb > 0) && (node->isMaster()) && (fn_local_symmetry_masks.size() >= 1) && (fn_local_symmetry_operators.size() >= 1) )

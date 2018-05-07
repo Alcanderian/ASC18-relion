@@ -303,11 +303,10 @@ void runWavgKernel(
 
 	//cudaFuncSetCacheConfig(cuda_kernel_wavg_fast, cudaFuncCachePreferShared);
 
-	//printf("PASSNUM: %d\n", (int)XMIPP_MAX((image_size / WAVG_BLOCK_SIZE) + 1, (image_size / WAVG_BLOCK_SIZE_DATA3D) + 1));
 	if (refs_are_ctf_corrected)
 	{
 		if(data_is_3D)
-			cuda_kernel_wavg<true,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(4*translation_num+3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<true,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -328,7 +327,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else if (projector.mdlZ!=0)
-			cuda_kernel_wavg<true,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<true,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -349,7 +348,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else
-			cuda_kernel_wavg<true,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<true,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -373,7 +372,7 @@ void runWavgKernel(
 	else
 	{
 		if(data_is_3D)
-			cuda_kernel_wavg<false,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(4*translation_num+3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<false,true,true,WAVG_BLOCK_SIZE_DATA3D><<<block_dim,WAVG_BLOCK_SIZE_DATA3D,(3*WAVG_BLOCK_SIZE_DATA3D+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -394,7 +393,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else if (projector.mdlZ!=0)
-			cuda_kernel_wavg<false,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<false,true,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -415,7 +414,7 @@ void runWavgKernel(
 				part_scale
 				);
 		else
-			cuda_kernel_wavg<false,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(4*translation_num+3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
+			cuda_kernel_wavg<false,false,false,WAVG_BLOCK_SIZE><<<block_dim,WAVG_BLOCK_SIZE,(3*WAVG_BLOCK_SIZE+9)*sizeof(XFLOAT),stream>>>(
 				eulers,
 				projector,
 				image_size,
@@ -465,7 +464,7 @@ void runBackProjectKernel(
 
 	if(BP.mdlZ==1)
 	{
-		cuda_kernel_backproject2D<<<imageCount,BP_2D_BLOCK_SIZE,(3*translation_num)*sizeof(XFLOAT),optStream>>>(
+		cuda_kernel_backproject2D<<<imageCount,BP_2D_BLOCK_SIZE,0,optStream>>>(
 				d_img_real,
 				d_img_imag,
 				trans_x,
@@ -556,7 +555,7 @@ void runBackProjectKernel(
 		else
 		{
 			if(data_is_3D)
-				cuda_kernel_backproject3D<true><<<imageCount,BP_DATA3D_BLOCK_SIZE,(4*translation_num)*sizeof(XFLOAT),optStream>>>(
+				cuda_kernel_backproject3D<true><<<imageCount,BP_DATA3D_BLOCK_SIZE,0,optStream>>>(
 					d_img_real,
 					d_img_imag,
 					trans_x,
@@ -584,7 +583,7 @@ void runBackProjectKernel(
 					BP.mdlInitY,
 					BP.mdlInitZ);
 			else
-				cuda_kernel_backproject3D<false><<<imageCount,BP_REF3D_BLOCK_SIZE,(3*translation_num+1)*sizeof(XFLOAT),optStream>>>(
+				cuda_kernel_backproject3D<false><<<imageCount,BP_REF3D_BLOCK_SIZE,0,optStream>>>(
 					d_img_real,
 					d_img_imag,
 					trans_x,
@@ -698,7 +697,7 @@ void runDiff2KernelCoarse(
 		bool data_is_3D)
 {
 	const int blocks3D = (data_is_3D? D2C_BLOCK_SIZE_DATA3D : D2C_BLOCK_SIZE_REF3D);
-	const size_t _48KB = (1 << 10) * 48;
+
 	if(!do_CC)
 	{
 		if(projector.mdlZ!=0)
@@ -721,7 +720,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true,true, D2C_BLOCK_SIZE_DATA3D, D2C_EULERS_PER_BLOCK_DATA3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -735,7 +734,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D, D2C_EULERS_PER_BLOCK_REF3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -753,7 +752,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true,true, D2C_BLOCK_SIZE_DATA3D, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_DATA3D,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_DATA3D,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -767,7 +766,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_REF3D,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_REF3D,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -787,7 +786,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true,true, D2C_BLOCK_SIZE_DATA3D*2, D2C_EULERS_PER_BLOCK_DATA3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D*2,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D*2,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -801,7 +800,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D*2, D2C_EULERS_PER_BLOCK_REF3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D*2,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D*2,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -820,7 +819,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true, true, D2C_BLOCK_SIZE_DATA3D*2, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_DATA3D*2,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_DATA3D*2,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -834,7 +833,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D*2, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_REF3D*2,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_REF3D*2,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -854,7 +853,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true,true, D2C_BLOCK_SIZE_DATA3D*4, D2C_EULERS_PER_BLOCK_DATA3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D*4,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D*4,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -868,7 +867,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D*4, D2C_EULERS_PER_BLOCK_REF3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D*4,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D*4,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -886,7 +885,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true,true, D2C_BLOCK_SIZE_DATA3D*4, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_DATA3D*4,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_DATA3D*4,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -900,7 +899,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D*4, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_REF3D*4,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_REF3D*4,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -921,7 +920,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true,true, D2C_BLOCK_SIZE_DATA3D*8, D2C_EULERS_PER_BLOCK_DATA3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D*8,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_DATA3D,D2C_BLOCK_SIZE_DATA3D*8,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -935,7 +934,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D*8, D2C_EULERS_PER_BLOCK_REF3D, 4>
-						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D*8,_48KB,stream>>>(
+						<<<even_orientation_num/D2C_EULERS_PER_BLOCK_REF3D,D2C_BLOCK_SIZE_REF3D*8,0,stream>>>(
 							d_eulers,
 							trans_x,
 							trans_y,
@@ -953,7 +952,7 @@ void runDiff2KernelCoarse(
 				{
 					if(data_is_3D)
 						cuda_kernel_diff2_coarse<true,true, D2C_BLOCK_SIZE_DATA3D*8, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_DATA3D*8,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_DATA3D*8,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -967,7 +966,7 @@ void runDiff2KernelCoarse(
 							image_size);
 					else
 						cuda_kernel_diff2_coarse<true,false, D2C_BLOCK_SIZE_REF3D*8, 1, 4>
-						<<<rest,D2C_BLOCK_SIZE_REF3D*8,_48KB,stream>>>(
+						<<<rest,D2C_BLOCK_SIZE_REF3D*8,0,stream>>>(
 							&d_eulers[9*even_orientation_num],
 							trans_x,
 							trans_y,
@@ -1001,7 +1000,7 @@ void runDiff2KernelCoarse(
 			{
 				if(data_is_3D)
 					cuda_kernel_diff2_coarse<false,true, D2C_BLOCK_SIZE_2D, D2C_EULERS_PER_BLOCK_2D, 2>
-					<<<even_orientation_num/D2C_EULERS_PER_BLOCK_2D,D2C_BLOCK_SIZE_2D,_48KB,stream>>>(
+					<<<even_orientation_num/D2C_EULERS_PER_BLOCK_2D,D2C_BLOCK_SIZE_2D,0,stream>>>(
 						d_eulers,
 						trans_x,
 						trans_y,
@@ -1015,7 +1014,7 @@ void runDiff2KernelCoarse(
 						image_size);
 				else
 					cuda_kernel_diff2_coarse<false,false, D2C_BLOCK_SIZE_2D, D2C_EULERS_PER_BLOCK_2D, 2>
-					<<<even_orientation_num/D2C_EULERS_PER_BLOCK_2D,D2C_BLOCK_SIZE_2D,_48KB,stream>>>(
+					<<<even_orientation_num/D2C_EULERS_PER_BLOCK_2D,D2C_BLOCK_SIZE_2D,0,stream>>>(
 						d_eulers,
 						trans_x,
 						trans_y,
@@ -1034,7 +1033,7 @@ void runDiff2KernelCoarse(
 			{
 				if(data_is_3D)
 					cuda_kernel_diff2_coarse<false,true, D2C_BLOCK_SIZE_2D, 1, 2>
-					<<<rest,D2C_BLOCK_SIZE_2D,_48KB,stream>>>(
+					<<<rest,D2C_BLOCK_SIZE_2D,0,stream>>>(
 						&d_eulers[9*even_orientation_num],
 						trans_x,
 						trans_y,
@@ -1048,7 +1047,7 @@ void runDiff2KernelCoarse(
 						image_size);
 				else
 					cuda_kernel_diff2_coarse<false,false, D2C_BLOCK_SIZE_2D, 1, 2>
-					<<<rest,D2C_BLOCK_SIZE_2D,_48KB,stream>>>(
+					<<<rest,D2C_BLOCK_SIZE_2D,0,stream>>>(
 						&d_eulers[9*even_orientation_num],
 						trans_x,
 						trans_y,
