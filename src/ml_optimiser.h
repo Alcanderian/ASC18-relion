@@ -28,6 +28,7 @@
 #include "src/ctf.h"
 #include "src/time.h"
 #include "src/mask.h"
+#include "src/fftw.h"
 #include "src/healpix_sampling.h"
 #include "src/helix.h"
 #include "src/local_symmetry.h"

@@ -3463,6 +3463,7 @@ void MlOptimiser::symmetriseReconstructions()
 
 			if (mymodel.pdf_class[iclass] > 0.)
 			{
+				//printf("[Sysu Note]: Lets Recon +++++++++\n");
 				// Immediately after expectation process. Do rise and twist for all asymmetrical units in Fourier space
 				// Also convert helical rise to pixels for BPref object
 				wsum_model.BPref[ith_recons].symmetrise(mymodel.helical_nr_asu, mymodel.helical_twist[ith_recons], mymodel.helical_rise[ith_recons] / mymodel.pixel_size);

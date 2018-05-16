@@ -451,6 +451,11 @@ will still yield good performance and possibly a more stable execution. \n" << s
 			}
 		}
 	}
+<<<<<<< HEAD
+=======
+	/************************************************************************/
+
+>>>>>>> 683486f19c9fe87d987db5a32f1b40242f07d205
 #endif // CUDA
 
 
@@ -550,6 +555,12 @@ will still yield good performance and possibly a more stable execution. \n" << s
 		}
 	}
 
+<<<<<<< HEAD
+=======
+#ifdef CUDA
+#endif
+
+>>>>>>> 683486f19c9fe87d987db5a32f1b40242f07d205
 #ifdef DEBUG
     std::cerr<<"MlOptimiserMpi::initialise Done"<<std::endl;
 #endif
@@ -2929,6 +2940,7 @@ void MlOptimiserMpi::iterate()
 						std::cout << " Applying helical symmetry from the last iteration in real space..." << std::endl;
 				}
 			}
+			//printf("[Sysu Note]: Ready to Recon ==================\n");
 			symmetriseReconstructions();
 
 			if ( (verb > 0) && (node->isMaster()) && (fn_local_symmetry_masks.size() >= 1) && (fn_local_symmetry_operators.size() >= 1) )

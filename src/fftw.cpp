@@ -48,6 +48,10 @@
 #include "src/args.h"
 #include <string.h>
 #include <math.h>
+#ifdef CUDA
+#include "src/gpu_utils/sysu_cuda_bundle.h"
+#include "src/gpu_utils/cuda_fft.h"
+#endif
 
 static pthread_mutex_t fftw_plan_mutex = PTHREAD_MUTEX_INITIALIZER;
 

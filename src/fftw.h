@@ -129,7 +129,7 @@ private:
 		this->nr_threads = 1;
 	}
 #else
-	printf("[Sysu Note]: Using FFTW with single thread\n");
+	//printf("[Sysu Note]: Using FFTW with single thread\n");
 	this->nr_threads = 1;
 #endif
     }
@@ -153,7 +153,7 @@ public:
 		{
 #ifdef FFTW_OMP
 			fftw_plan_with_nthreads(nr_threads);
-			printf(" Reconfigure FFTW with %d threads\n", nr_threads);
+			//printf(" Reconfigure FFTW with %d threads\n", nr_threads);
 			instance->nr_threads = nr_threads;
 #endif
 		}
@@ -221,6 +221,8 @@ public:
     /* fftw Backward plan */
     fftw_plan fPlanBackward;
 #endif
+
+	void * cufft;
 
     bool plans_are_set;
 
