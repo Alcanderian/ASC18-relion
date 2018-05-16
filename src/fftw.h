@@ -119,13 +119,13 @@ private:
 	int a = fftw_init_threads();
 	if(a!=0)
 	{
-		printf("[Sysu Note]: Succeed FFTW with %d threads\n", nr_threads);
+		//printf("[Sysu Note]: Succeed FFTW with %d threads\n", nr_threads);
 		fftw_plan_with_nthreads(nr_threads);
 		this->nr_threads = nr_threads;
 	}
 	else
 	{
-		printf("[Sysu Note]: Failed FFTW with threads\n");
+		//printf("[Sysu Note]: Failed FFTW with threads\n");
 		this->nr_threads = 1;
 	}
 #else
