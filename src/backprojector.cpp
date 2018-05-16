@@ -1500,6 +1500,16 @@ static inline void RFP_ARR_PLUS(RFLOAT* arr_dst, RFLOAT* arr_src, int arr_len)
     }
 }
 
+static inline void RFC_ARR_PLUS(Complex* arr_dst, RFLOAT* arr_src, int arr_len)
+{
+#pragma simd
+    for(int i = 0; i < arr_len; i++)
+    {
+        arr_dst[i].real += arr_src[2 * i];
+		arr_dst[i].imag += arr_src[2 * i + 1];
+    }
+}
+
 void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 {
 	SysuTaskDistributor * sysu_distributor = SysuTaskDistributor::getInstance(SYSU_CPU_PARALLEL);
@@ -1641,6 +1651,9 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 					conj_factors[arr_it] = 1.0;
 			}
 
+			if(j_act_st == j_st - 1)
+				continue;
+
 
 #pragma ivdep
 			// for (long int j=STARTINGX(sum_weight); j<=FINISHINGX(sum_weight); j++)
@@ -1780,7 +1793,7 @@ void BackProjector::doThreadApplyPointGroupSymmetry(int thread_id)
 				arr_plus_3d_r[_arr_it] = _fz * ddxy0, ddxy1 * fz;
 			} // end loop over all elements of sum_weight
 
-			RFP_ARR_PLUS((RFLOAT*)&sum_data.data[_iter_3d], &arr_plus_3d_cri[j_act_st - j_st], 2 * (j_act_ed - j_act_st + 1));
+			RFC_ARR_PLUS(&sum_data.data[_iter_3d], &arr_plus_3d_cri[j_act_st - j_st], (j_act_ed - j_act_st + 1));
 			RFP_ARR_PLUS(&sum_weight.data[_iter_3d], &arr_plus_3d_r[j_act_st - j_st], (j_act_ed - j_act_st + 1));
 		}
 	}

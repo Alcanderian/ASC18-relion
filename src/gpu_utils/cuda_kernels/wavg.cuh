@@ -50,19 +50,19 @@ __global__ void cuda_kernel_wavg(
 
 	// now max <= 13KB, 48 - 1 = 47 KB left.
 
-	XFLOAT eulers[9];
+	XFLOAT e0, e1, e2, e3, e4, e5, e6, e7, e8;
 
-	eulers[0] = g_eulers[bid*9+0];
-	eulers[1] = g_eulers[bid*9+1];
-	eulers[2] = g_eulers[bid*9+2];
+	e0 = g_eulers[bid*9+0];
+	e1 = g_eulers[bid*9+1];
+	e2 = g_eulers[bid*9+2];
 
-	eulers[3] = g_eulers[bid*9+3];
-	eulers[4] = g_eulers[bid*9+4];
-	eulers[5] = g_eulers[bid*9+5];
+	e3 = g_eulers[bid*9+3];
+	e4 = g_eulers[bid*9+4];
+	e5 = g_eulers[bid*9+5];
 
-	eulers[6] = g_eulers[bid*9+6];
-	eulers[7] = g_eulers[bid*9+7];
-	eulers[8] = g_eulers[bid*9+8];
+	e6 = g_eulers[bid*9+6];
+	e7 = g_eulers[bid*9+7];
+	e8 = g_eulers[bid*9+8];
 
 	int tran_pass_num(translation_num / block_sz);
 	int remain_num(translation_num % block_sz);
@@ -137,22 +137,22 @@ __global__ void cuda_kernel_wavg(
 		if(DATA3D)
 			projector.project3Dmodel(
 				x,y,z,
-				eulers[0], eulers[1], eulers[2],
-				eulers[3], eulers[4], eulers[5],
-				eulers[6], eulers[7], eulers[8],
+				e0, e1, e2,
+				e3, e4, e5,
+				e6, e7, e8,
 				ref_real, ref_imag);
 		else if(REF3D)
 			projector.project3Dmodel(
 				x,y,
-				eulers[0], eulers[1],
-				eulers[3], eulers[4],
-				eulers[6], eulers[7],
+				e0, e1,
+				e3, e4,
+				e6, e7,
 				ref_real, ref_imag);
 		else
 			projector.project2Dmodel(
 					x,y,
-				eulers[0], eulers[1],
-				eulers[3], eulers[4],
+				e0, e1,
+				e3, e4,
 				ref_real, ref_imag);
 
 		if (REFCTF)

@@ -330,7 +330,8 @@ void MlOptimiser::parseContinue(int argc, char **argv)
 	nr_threads = textToInteger(parser.getOption("--j", "Number of threads to run in parallel (only useful on multi-core machines)", "1"));
 	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "-1"));
 	fftw_threads = textToInteger(parser.getOption("--fftw_j", "Number of cpu threads to run in FFTWl (only useful on multi-core machines)", "1"));
-	
+	rank_on_each_host = textToInteger(parser.getOption("--rank_per_host", "Number of Rank Per Host You Planed.", "1"));
+	printf("[Sysu Note]: FFTW threads %d\n", fftw_threads);
 	if (sysu_cpu_threads == -1)
 	{
 		sysu_cpu_threads = nr_threads;
@@ -570,7 +571,8 @@ void MlOptimiser::parseInitial(int argc, char **argv)
 	nr_threads = textToInteger(parser.getOption("--j", "Number of threads to run in parallel (only useful on multi-core machines)", "1"));
 	sysu_cpu_threads = textToInteger(parser.getOption("--sysu_cpu_j", "(SYSU) Number of cpu threads to run in parallel (only useful on multi-core machines)", "1"));
 	fftw_threads = textToInteger(parser.getOption("--fftw_j", "Number of cpu threads to run in FFTWl (only useful on multi-core machines)", "1"));
-	
+	rank_on_each_host = textToInteger(parser.getOption("--rank_per_host", "Number of Rank Per Host You Planed.", "1"));
+	printf("[Sysu Note]: FFTW threads %d\n", fftw_threads);
 	if (sysu_cpu_threads == -1)
 	{
 		sysu_cpu_threads = nr_threads;

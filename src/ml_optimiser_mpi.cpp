@@ -451,7 +451,6 @@ will still yield good performance and possibly a more stable execution. \n" << s
 			}
 		}
 	}
-	/************************************************************************/
 #endif // CUDA
 
 
@@ -550,7 +549,6 @@ will still yield good performance and possibly a more stable execution. \n" << s
 			do_use_all_data = true;
 		}
 	}
-
 
 #ifdef DEBUG
     std::cerr<<"MlOptimiserMpi::initialise Done"<<std::endl;

@@ -20,7 +20,6 @@
 
 #include <src/ml_optimiser_mpi.h>
 
-
 int main(int argc, char **argv)
 {
 
@@ -30,7 +29,6 @@ int main(int argc, char **argv)
     	// Read in parameters from the command line
     	optimiser.read(argc, argv);
 
-		FftwThreadManager::initFftw(1);
     	// Dirty hack to loop around movies one micrograph at a time
     	if (optimiser.do_movies_in_batches && optimiser.fn_data_movie != "" && optimiser.do_skip_maximization)
     	{
@@ -41,7 +39,12 @@ int main(int argc, char **argv)
     		// normal code
 
 			// Set things up
+			FftwThreadManager::initFftw(optimiser.fftw_threads);
+
 			optimiser.initialise();
+
+			FftwThreadManager::cleanupFftw();
+			FftwThreadManager::initFftw(1);
 
 			// Iterate
 			optimiser.iterate();

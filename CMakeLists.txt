@@ -215,6 +215,10 @@ if(NOT FFTW_FOUND)
 	include(${CMAKE_SOURCE_DIR}/cmake/BuildFFTW.cmake)
 endif(NOT FFTW_FOUND)
 
+if(FFTW_OMP)
+    add_definitions(-DFFTW_OMP)
+endif(FFTW_OMP)
+
 include(CheckCXXSymbolExists)
 check_cxx_symbol_exists(sincos    math.h   HAVE_SINCOS)
 check_cxx_symbol_exists(__sincos  math.h   HAVE___SINCOS)
